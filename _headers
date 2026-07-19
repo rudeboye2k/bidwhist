@@ -1,0 +1,17 @@
+# Cloudflare Pages headers. https://developers.cloudflare.com/pages/configuration/headers/
+
+# Fingerprint-free assets — safe to cache hard, but revalidate so pushes show up.
+/js/*
+  Cache-Control: public, max-age=3600, must-revalidate
+/styles.css
+  Cache-Control: public, max-age=3600, must-revalidate
+
+# The entry point should always reflect the latest deploy.
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Baseline security headers for every response.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: SAMEORIGIN
