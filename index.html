@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bid Whist — Uptown &amp; Downtown</title>
+<meta name="description" content="Classic partnership Bid Whist: bidding, jokers, the kitty, uptown and downtown — you and a partner against two rivals.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Libre+Franklin:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♠</text></svg>">
+</head>
+<body>
+<div class="room" id="app">
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <h1 class="brand">Bid<span class="brand-amp">&nbsp;</span><em>Whist</em></h1>
+    <p class="tagline">uptown &middot; downtown &middot; no-trump</p>
+    <nav class="topnav">
+      <button class="btn ghost" id="btn-rules" type="button">How to Play</button>
+      <button class="btn ghost" id="btn-settings" type="button">Table Rules</button>
+      <button class="btn ghost" id="btn-new-game" type="button">New Game</button>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <section class="table-zone">
+      <div class="table" id="table">
+        <div class="rail" aria-hidden="true"></div>
+
+        <div class="seat seat-north" id="seat-2">
+          <div class="opp-hand" id="opp-hand-2"></div>
+          <div class="nameplate" id="plate-2"><span class="pname">Marcus</span><span class="prole">your partner</span></div>
+          <div class="bid-chip" id="chip-2"></div>
+        </div>
+        <div class="seat seat-west" id="seat-1">
+          <div class="opp-hand vertical" id="opp-hand-1"></div>
+          <div class="nameplate" id="plate-1"><span class="pname">Pearl</span><span class="prole">west</span></div>
+          <div class="bid-chip" id="chip-1"></div>
+        </div>
+        <div class="seat seat-east" id="seat-3">
+          <div class="opp-hand vertical" id="opp-hand-3"></div>
+          <div class="nameplate" id="plate-3"><span class="pname">Deacon</span><span class="prole">east</span></div>
+          <div class="bid-chip" id="chip-3"></div>
+        </div>
+
+        <div class="center">
+          <div class="kitty" id="kitty" title="The kitty"></div>
+          <div class="trick" id="trick"></div>
+          <div class="table-msg" id="table-msg"></div>
+        </div>
+
+        <div class="seat seat-south" id="seat-0">
+          <div class="bid-chip" id="chip-0"></div>
+          <div class="hand" id="hand"></div>
+          <div class="nameplate you" id="plate-0"><span class="pname">You</span><span class="prole">south</span></div>
+        </div>
+      </div>
+
+      <div class="action-bar" id="action-bar"></div>
+    </section>
+
+    <aside class="side">
+      <div class="panel score-panel">
+        <h2 class="panel-title">Score <small id="score-target"></small></h2>
+        <div class="score-row">
+          <div class="score-box us"><span class="score-team">Us</span><span class="score-num" id="score-us">0</span></div>
+          <div class="score-vs">—</div>
+          <div class="score-box them"><span class="score-team">Them</span><span class="score-num" id="score-them">0</span></div>
+        </div>
+      </div>
+
+      <div class="panel contract-panel" id="contract-panel">
+        <h2 class="panel-title">This Hand</h2>
+        <div class="contract-line" id="contract-line">No contract yet</div>
+        <div class="books-row">
+          <div class="books-box"><span>Us</span><b id="books-us">0</b></div>
+          <div class="books-box"><span>Them</span><b id="books-them">0</b></div>
+        </div>
+        <div class="set-meter" id="set-meter"></div>
+      </div>
+
+      <div class="panel log-panel">
+        <h2 class="panel-title">Table Talk</h2>
+        <div class="log" id="log" aria-live="polite"></div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Splash -->
+  <div class="overlay show" id="splash">
+    <div class="splash-card">
+      <p class="splash-kicker">a rent-party classic</p>
+      <h2 class="splash-title">Bid <em>Whist</em></h2>
+      <p class="splash-copy">Four hands, two teams, one kitty. Bid your books, name your trump,
+        and run a Boston on &rsquo;em. You and Marcus against Pearl and Deacon.</p>
+      <button class="btn primary big" id="btn-deal-in" type="button">Deal Me In</button>
+    </div>
+  </div>
+
+  <!-- Hand summary -->
+  <div class="overlay" id="modal-summary">
+    <div class="modal">
+      <div class="stamp" id="summary-stamp"></div>
+      <h2 class="modal-title" id="summary-title"></h2>
+      <div class="summary-body" id="summary-body"></div>
+      <button class="btn primary" id="btn-next-hand" type="button">Next Hand</button>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="overlay" id="modal-settings">
+    <div class="modal">
+      <h2 class="modal-title">Table Rules</h2>
+      <p class="modal-note">Every table plays it a little different. Changes take effect next hand.</p>
+      <form id="settings-form" class="settings">
+        <label class="setting"><span>Minimum bid</span>
+          <select name="minBid"><option value="3">3</option><option value="4">4</option></select>
+        </label>
+        <label class="setting"><span>Game to</span>
+          <select name="gameTarget"><option>5</option><option selected>7</option><option>9</option><option>11</option><option>21</option></select>
+        </label>
+        <label class="setting check"><input type="checkbox" name="noTrumpDoubles" checked><span>No-trump scores double</span></label>
+        <label class="setting check"><input type="checkbox" name="kittyIsBook" checked><span>Kitty counts as the bidders&rsquo; first book</span></label>
+        <label class="setting check"><input type="checkbox" name="forcedDealerBid" checked><span>Dealer must bid if all three pass</span></label>
+        <label class="setting check"><input type="checkbox" name="sportKitty"><span>Sport the kitty (shown to the whole table)</span></label>
+        <label class="setting check"><input type="checkbox" name="bostonDoubles"><span>A made 7-bid (Boston) scores double</span></label>
+      </form>
+      <button class="btn primary" id="btn-settings-done" type="button">Done</button>
+    </div>
+  </div>
+
+  <!-- Rules -->
+  <div class="overlay" id="modal-howto">
+    <div class="modal wide">
+      <h2 class="modal-title">How to Play</h2>
+      <div class="howto">
+        <p><b>The deal.</b> 54 cards — a full deck plus both jokers. Everyone gets 12; six go
+          face-down to the <i>kitty</i>. Twelve tricks (<i>books</i>) plus the kitty makes
+          <b>13 books</b> in every hand.</p>
+        <p><b>The auction.</b> Starting left of the dealer, each player gets one call: pass, or bid
+          <b>3&ndash;7</b> as <b>Uptown</b> (high cards win), <b>Downtown</b> (after the ace, low
+          cards win: A, 2, 3 &hellip; K), or <b>No-Trump</b>. A bid promises <i>six plus the bid</i>
+          books — bid 4 means 10 books. At the same number, No-Trump outranks Uptown and Downtown;
+          Uptown and Downtown tie, so you must go up a number to beat one with the other.</p>
+        <p><b>The kitty.</b> The high bidder names trump (or picks high/low for No-Trump), takes all
+          six kitty cards, and buries six — and that buried book belongs to the bidding team.</p>
+        <p><b>The play.</b> The bidder leads. Follow suit if you can; the jokers are the two biggest
+          trumps. In No-Trump the jokers are dead cards — they can never win a book and only fall
+          when you&rsquo;re out of the led suit.</p>
+        <p><b>The score.</b> Make the bid and the bidding team scores <i>every</i> book past six.
+          Get set and you lose the bid instead. No-Trump doubles it, up or down. Defenders set a bid
+          by winning <b>8 &minus; bid</b> books: four books stops a 4-bid, three stops a 5. Taking
+          all 13 is a <b>Boston</b>. First team to the target wins; fall to minus-target and you lose.</p>
+      </div>
+      <button class="btn primary" id="btn-howto-done" type="button">Back to the Table</button>
+    </div>
+  </div>
+
+  <!-- Game over -->
+  <div class="overlay" id="modal-gameover">
+    <div class="modal">
+      <div class="stamp" id="gameover-stamp"></div>
+      <h2 class="modal-title" id="gameover-title"></h2>
+      <div class="summary-body" id="gameover-body"></div>
+      <button class="btn primary big" id="btn-rematch" type="button">Run It Back</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/engine.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
