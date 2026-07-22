@@ -429,20 +429,41 @@ body {
 }
 .setting input[type="text"]:focus { outline: none; border-color: var(--gold-bright); }
 
-.online-split { display: flex; gap: 16px; margin: 6px 0 4px; }
-.online-col { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 14px;
-  background: rgba(0,0,0,.25); border: 1px solid rgba(212,169,78,.25); border-radius: 14px; }
-.online-col .btn { width: 100%; }
+/* Server URL — full-width field with the label above it. */
+.online-field { text-align: left; margin: 4px 0 14px; }
+.online-field label {
+  display: block; font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--gold-dim); margin-bottom: 5px;
+}
+.online-field input {
+  width: 100%; background: rgba(0,0,0,.4); color: var(--cream);
+  border: 1px solid var(--gold-dim); border-radius: 8px; padding: 8px 12px;
+  font-family: var(--font-body); font-size: 14px;
+}
+.online-field input:focus { outline: none; border-color: var(--gold-bright); }
+
+/* Host / Join — two balanced panels with an "or" between them. */
+.online-split { display: flex; gap: 12px; margin: 6px 0 4px; align-items: stretch; }
+.online-col {
+  flex: 1; display: flex; flex-direction: column; gap: 9px; padding: 16px 14px;
+  justify-content: center; text-align: center;
+  background: rgba(0,0,0,.25); border: 1px solid rgba(212,169,78,.25); border-radius: 14px;
+}
+.online-col .btn { width: 100%; white-space: nowrap; font-size: 12.5px; letter-spacing: .04em; }
+.online-or {
+  align-self: center; font-family: var(--font-display); font-style: italic;
+  font-size: 14px; color: var(--gold-dim); padding: 0 2px;
+}
 .online-sub { font-size: 11.5px; color: var(--gold-dim); text-align: center; font-style: italic; }
-.join-row { display: flex; gap: 6px; }
-.code-input, .code-badge, .code-key {
-  font-family: var(--font-display); letter-spacing: .28em; text-transform: uppercase;
-}
+
+.code-badge, .code-key { font-family: var(--font-display); letter-spacing: .28em; text-transform: uppercase; }
 .code-input {
-  flex: 1; min-width: 0; background: rgba(0,0,0,.4); color: var(--gold-bright);
-  border: 1px solid var(--gold-dim); border-radius: 8px; padding: 6px 10px;
-  font-size: 18px; font-weight: 700; text-align: center;
+  width: 100%; background: rgba(0,0,0,.4); color: var(--gold-bright);
+  border: 1px solid var(--gold-dim); border-radius: 8px; padding: 8px 10px;
+  font-family: var(--font-display); font-size: 17px; font-weight: 700;
+  letter-spacing: .22em; text-transform: uppercase; text-align: center;
 }
+.code-input::placeholder { color: rgba(212,169,78,.4); letter-spacing: .14em; }
 .code-input:focus { outline: none; border-color: var(--gold-bright); }
 .online-error { color: var(--bad); font-size: 12.5px; min-height: 18px; margin: 8px 0; }
 

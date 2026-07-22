@@ -119,21 +119,19 @@
         <span class="profile-summary-name" id="online-pname">You</span>
         <button class="btn ghost small" id="btn-edit-profile" type="button">Edit name &amp; avatar</button>
       </div>
-      <form id="online-form" class="settings" onsubmit="return false">
-        <label class="setting"><span>Server URL</span>
-          <input type="text" id="online-server" placeholder="https://bidwhist-server.…workers.dev" autocomplete="off">
-        </label>
-      </form>
+      <div class="online-field">
+        <label for="online-server">Server URL</label>
+        <input type="text" id="online-server" placeholder="https://bidwhist-server.…workers.dev" autocomplete="off">
+      </div>
       <div class="online-split">
         <div class="online-col">
           <button class="btn primary" id="btn-host" type="button">Host a Table</button>
           <p class="online-sub">You get a game key to share.</p>
         </div>
+        <div class="online-or">or</div>
         <div class="online-col">
-          <div class="join-row">
-            <input type="text" id="join-code" class="code-input" maxlength="6" placeholder="KEY" autocomplete="off">
-            <button class="btn primary" id="btn-join" type="button">Join</button>
-          </div>
+          <input type="text" id="join-code" class="code-input" maxlength="6" placeholder="GAME KEY" autocomplete="off">
+          <button class="btn primary" id="btn-join" type="button">Join a Table</button>
           <p class="online-sub">Enter a friend&rsquo;s game key.</p>
         </div>
       </div>
