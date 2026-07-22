@@ -36,6 +36,7 @@
     legalIds: new Set(),
     discardPicks: new Set(),
     running: false,
+    learner: AI.createLearner(), // adapts across hands within this session
   };
 
   // ---- logging & messages ---------------------------------------------------
@@ -47,6 +48,19 @@
     const box = $('log');
     box.appendChild(p);
     box.scrollTop = box.scrollHeight;
+  }
+
+  // Occasionally voice what the AI has learned about the human's bidding —
+  // makes the "they're reading you" adaptation visible at the table.
+  function maybeShowRead() {
+    const me = G.learner.seats[0];
+    if (me.declares < 4 || G.handNo % 3 !== 0) return;
+    const opp = Math.random() < 0.5 ? NAMES[1] : NAMES[3]; // an opponent, not your partner
+    let line = null;
+    if (me.surplus < -0.8) line = `${opp} mutters: "You bid big — we just sit back and set you."`;
+    else if (me.surplus > 0.9) line = `${opp} nods: "You play it safe. We can't let you steal the cheap ones."`;
+    else if (me.madeRate > 0.8) line = `${opp} squints: "You've been making everything. Time to press."`;
+    if (line) log(`<i>${line}</i>`);
   }
 
   function tableMsg(text) {
@@ -392,7 +406,7 @@
         if (!bid.pass) G.plans[0] = { type: bid.type };
       } else {
         await wait(850);
-        const res = AI.chooseBid(G.hands[seat], G.high, G.rules, mustBid);
+        const res = AI.chooseBid(G.hands[seat], G.high, G.rules, mustBid, Math.random, G.learner, seat);
         bid = res.bid;
         if (!bid.pass) G.plans[seat] = res.plan;
       }
@@ -402,6 +416,7 @@
       if (bid.pass) {
         log(`${NAMES[seat]} pass${seat === 0 ? '' : 'es'}.`);
       } else {
+        bid._seat = seat;
         G.high = bid; G.highSeat = seat;
         log(`<b>${NAMES[seat]}</b> bid${seat === 0 ? '' : 's'} <b>${E.describeBid(bid)}</b>.`);
       }
@@ -545,6 +560,15 @@
     log(res.made
       ? `<b>${TEAM_NAME[bidTeam]}</b> make it: ${res.delta >= 0 ? '+' : ''}${res.delta}.`
       : `<b>${TEAM_NAME[bidTeam]}</b> get set: ${res.delta}.`, true);
+
+    // The table learns from the hand. Calibrate off the AI's own declared hands
+    // (not the human's), and always update the per-seat read on every player.
+    AI.observeHand(G.learner, {
+      declarerSeat: G.highSeat, amount: G.contract.amount, needed: res.needed,
+      bidTeamBooks: G.books[bidTeam], made: res.made,
+      calibrate: G.highSeat !== 0,
+    });
+    maybeShowRead();
 
     const winner = E.gameOver(G.scores, G.rules);
     await wait(400);

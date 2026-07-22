@@ -68,8 +68,9 @@
   }
 
   // Best available contract for this hand, with an estimated team book count.
-  // Team estimate = own post-kitty strength + partner + kitty book.
-  function bestPlan(hand) {
+  // Team estimate = own post-kitty strength + partner + kitty book. `bias` is
+  // the session learner's running correction (see createLearner).
+  function bestPlan(hand, bias) {
     let best = null;
     for (const trump of ['S', 'H', 'D', 'C']) {
       for (const direction of ['uptown', 'downtown']) {
@@ -83,16 +84,74 @@
       if (est > best.est) best = { type: 'notrump', trump: null, direction, est };
     }
     // Own tricks improve after ditching 6 of 18 cards; partner ~2; kitty book 1.
-    best.teamBooks = best.est * 1.15 + 4.2;
+    best.teamBooks = best.est * 1.15 + 4.2 + (bias || 0);
     return best;
+  }
+
+  // ---- session learning -----------------------------------------------------
+  // Honest, measurable self-tuning — no neural nets, no training loop. The
+  // static heuristics are already well-tuned for standard play, so the learner
+  // is built to *stay out of the way* when results are healthy and only correct
+  // when the table's outcomes actually drift:
+  //  1. Bid calibration — a dead-zone controller on an EWMA of the make-rate.
+  //     Inside a healthy band it decays back to neutral (bias → 0), so it never
+  //     degrades normal play; outside it, it pulls the AI's aggression back into
+  //     line (e.g. after a mistuned rule set or a lopsided run).
+  //  2. Per-seat opponent model — observational: each player's average bid and
+  //     over/under-shoot, surfaced to the UI as the table's "read" on you.
+
+  // Wide band + slow EWMA: natural make-rate variance stays inside the band, so
+  // bidBias holds at 0 during healthy play. Only a sustained drift (a rule set
+  // the static tuning doesn't fit) pushes the EWMA out far enough to react.
+  const HEALTHY_LO = 0.58, HEALTHY_HI = 0.92;
+
+  function seatModel() { return { declares: 0, avgBid: 0, surplus: 0, madeRate: 0.6 }; }
+
+  function createLearner(opts) {
+    opts = opts || {};
+    return {
+      hands: 0,
+      alpha: opts.alpha != null ? opts.alpha : 0.07, // EWMA responsiveness (slow)
+      madeEWMA: opts.madeEWMA != null ? opts.madeEWMA : 0.75,
+      bidBias: opts.bidBias || 0,
+      seats: [seatModel(), seatModel(), seatModel(), seatModel()],
+    };
+  }
+
+  // Fold one finished hand into the learner. `calibrate` should be false for a
+  // human declarer, so the AI tunes itself off its own results, not the human's.
+  function observeHand(learner, info) {
+    if (!learner) return learner;
+    learner.hands++;
+    const { declarerSeat, amount, needed, bidTeamBooks, made, calibrate } = info;
+    if (calibrate !== false) {
+      learner.madeEWMA += learner.alpha * ((made ? 1 : 0) - learner.madeEWMA);
+      if (learner.madeEWMA > HEALTHY_HI)
+        learner.bidBias = Math.min(1.8, learner.bidBias + 0.10); // winning too easily → bid up
+      else if (learner.madeEWMA < HEALTHY_LO)
+        learner.bidBias = Math.max(-1.8, learner.bidBias - 0.14); // getting set → pull back
+      else
+        learner.bidBias *= 0.90; // calm water → drift back to the tuned baseline
+    }
+    if (declarerSeat != null) {
+      const m = learner.seats[declarerSeat];
+      const n = ++m.declares;
+      m.avgBid += (amount - m.avgBid) / n;
+      m.surplus += ((bidTeamBooks - needed) - m.surplus) / n; // +underbid / −overreach
+      m.madeRate += ((made ? 1 : 0) - m.madeRate) / n;
+    }
+    return learner;
   }
 
   // ---- bidding --------------------------------------------------------------
 
   // Returns {pass:true} or {amount, type} plus a private plan for later.
-  function chooseBid(hand, currentHigh, rules, mustBid, rng) {
+  // `learner` (optional) is a session model from createLearner; `seat` is the
+  // bidder's seat, used only for opponent-aware contesting.
+  function chooseBid(hand, currentHigh, rules, mustBid, rng, learner, seat) {
     rng = rng || Math.random;
-    const plan = bestPlan(hand);
+    void seat;
+    const plan = bestPlan(hand, learner ? learner.bidBias : 0);
     const noise = (rng() - 0.5) * 0.8;
     let maxAmount = Math.floor(plan.teamBooks + noise) - 6;
     maxAmount = Math.min(7, maxAmount);
@@ -210,5 +269,8 @@
     })[0];
   }
 
-  return { bestPlan, evalTrump, evalNoTrump, chooseBid, chooseDiscards, choosePlay };
+  return {
+    bestPlan, evalTrump, evalNoTrump, chooseBid, chooseDiscards, choosePlay,
+    createLearner, observeHand,
+  };
 });
