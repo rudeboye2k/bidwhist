@@ -215,16 +215,36 @@
     }
   }
 
+  // Colored suit glyph + name, e.g. ♥ Hearts (red) / ♠ Spades.
+  function suitHtml(suit) {
+    const red = suit === 'H' || suit === 'D';
+    return `<span class="chip-suit ${red ? 'red' : 'blk'}">${E.SUIT_GLYPHS[suit]} ${E.SUIT_NAMES[suit]}</span>`;
+  }
+
+  // What to show on a seat's chip. Once a trump contract is declared, the
+  // winning bidder's chip reveals the suit ("4 Downtown in ♥ Hearts").
+  function bidChipHtml(seat) {
+    if (G.contract && seat === G.highSeat) {
+      const c = G.contract;
+      if (c.type === 'notrump')
+        return `“${c.amount} No-Trump (${c.direction === 'uptown' ? 'high' : 'low'})”`;
+      const dir = c.type === 'uptown' ? 'Uptown' : 'Downtown';
+      return `“${c.amount} ${dir} in ${suitHtml(c.trump)}”`;
+    }
+    const bid = G.bids[seat];
+    if (!bid) return null;
+    return bid.pass ? '<span class="chip-pass">pass</span>' : '“' + E.describeBid(bid) + '”';
+  }
+
   function renderBidChips() {
     for (let p = 0; p < 4; p++) { const c = $('chip-' + p); if (c) { c.classList.remove('show'); c.innerHTML = ''; } }
     for (let seat = 0; seat < 4; seat++) {
       const chip = $('chip-' + slot(seat));
-      const bid = G.bids[seat];
-      if (!chip || !bid) continue;
+      if (!chip) continue;
+      const html = bidChipHtml(seat);
+      if (html == null) continue;
       chip.classList.add('show');
-      chip.innerHTML = bid.pass
-        ? '<span class="chip-pass">pass</span>'
-        : '“' + E.describeBid(bid) + '”';
+      chip.innerHTML = html;
     }
   }
 
@@ -512,6 +532,7 @@
       ? 'calls No-Trump, running ' + (c.direction === 'uptown' ? 'uptown' : 'downtown')
       : 'names <b>' + E.SUIT_NAMES[c.trump] + '</b> trump, ' + c.type}.`, true);
     renderContractLine();
+    renderBidChips(); // reveal the trump suit on the declarer's chip
 
     // kitty pickup
     if (G.rules.sportKitty) {
