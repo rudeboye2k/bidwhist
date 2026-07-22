@@ -19,6 +19,7 @@
     <h1 class="brand">Bid<span class="brand-amp">&nbsp;</span><em>Whist</em></h1>
     <p class="tagline">uptown &middot; downtown &middot; no-trump</p>
     <nav class="topnav">
+      <button class="btn ghost" id="btn-profile" type="button">Profile</button>
       <button class="btn ghost" id="btn-rules" type="button">How to Play</button>
       <button class="btn ghost" id="btn-settings" type="button">Table Rules</button>
       <button class="btn ghost" id="btn-new-game" type="button">New Game</button>
@@ -32,17 +33,17 @@
 
         <div class="seat seat-north" id="seat-2">
           <div class="opp-hand" id="opp-hand-2"></div>
-          <div class="nameplate" id="plate-2"><span class="pname">Marcus</span><span class="prole">your partner</span></div>
+          <div class="nameplate" id="plate-2"><span class="avatar"></span><span class="np-text"><span class="pname">Marcus</span><span class="prole">your partner</span></span></div>
           <div class="bid-chip" id="chip-2"></div>
         </div>
         <div class="seat seat-west" id="seat-1">
           <div class="opp-hand vertical" id="opp-hand-1"></div>
-          <div class="nameplate" id="plate-1"><span class="pname">Pearl</span><span class="prole">west</span></div>
+          <div class="nameplate" id="plate-1"><span class="avatar"></span><span class="np-text"><span class="pname">Pearl</span><span class="prole">west</span></span></div>
           <div class="bid-chip" id="chip-1"></div>
         </div>
         <div class="seat seat-east" id="seat-3">
           <div class="opp-hand vertical" id="opp-hand-3"></div>
-          <div class="nameplate" id="plate-3"><span class="pname">Deacon</span><span class="prole">east</span></div>
+          <div class="nameplate" id="plate-3"><span class="avatar"></span><span class="np-text"><span class="pname">Deacon</span><span class="prole">east</span></span></div>
           <div class="bid-chip" id="chip-3"></div>
         </div>
 
@@ -55,7 +56,7 @@
         <div class="seat seat-south" id="seat-0">
           <div class="bid-chip" id="chip-0"></div>
           <div class="hand" id="hand"></div>
-          <div class="nameplate you" id="plate-0"><span class="pname">You</span><span class="prole">south</span></div>
+          <div class="nameplate you" id="plate-0"><span class="avatar"></span><span class="np-text"><span class="pname">You</span><span class="prole">south</span></span></div>
         </div>
       </div>
 
@@ -100,6 +101,10 @@
         <button class="btn primary big" id="btn-deal-in" type="button">Play the Computer</button>
         <button class="btn ghost big" id="btn-play-online" type="button">Play Online</button>
       </div>
+      <button class="splash-profile" id="splash-profile" type="button">
+        <span class="avatar" id="splash-avatar"></span>
+        <span>Playing as <b id="splash-pname">You</b> &middot; <span class="edit-link">edit</span></span>
+      </button>
     </div>
   </div>
 
@@ -109,10 +114,12 @@
       <h2 class="modal-title">Play Online</h2>
       <p class="modal-note">Host a table and share the key, or join a friend&rsquo;s table with theirs.
         Empty seats are played by the computer.</p>
+      <div class="profile-summary" id="online-profile">
+        <span class="avatar big" id="online-avatar"></span>
+        <span class="profile-summary-name" id="online-pname">You</span>
+        <button class="btn ghost small" id="btn-edit-profile" type="button">Edit name &amp; avatar</button>
+      </div>
       <form id="online-form" class="settings" onsubmit="return false">
-        <label class="setting"><span>Your name</span>
-          <input type="text" id="online-name" maxlength="16" placeholder="You" autocomplete="off">
-        </label>
         <label class="setting"><span>Server URL</span>
           <input type="text" id="online-server" placeholder="https://bidwhist-server.…workers.dev" autocomplete="off">
         </label>
@@ -132,6 +139,30 @@
       </div>
       <p class="online-error" id="online-error"></p>
       <button class="btn ghost" id="btn-online-back" type="button">Back</button>
+    </div>
+  </div>
+
+  <!-- Profile editor -->
+  <div class="overlay" id="modal-profile">
+    <div class="modal">
+      <h2 class="modal-title">Your Player</h2>
+      <p class="modal-note">Pick a name and an avatar — upload a photo, or spin a cartoon.
+        This is how you show up at the table (solo and online).</p>
+      <div class="profile-editor">
+        <span class="avatar huge" id="profile-preview"></span>
+        <label class="setting profile-name"><span>Name</span>
+          <input type="text" id="profile-name" maxlength="16" placeholder="You" autocomplete="off">
+        </label>
+        <div class="profile-buttons">
+          <button class="btn ghost" id="btn-upload-avatar" type="button">Upload Photo</button>
+          <button class="btn ghost" id="btn-shuffle-avatar" type="button">Shuffle Cartoon</button>
+        </div>
+        <input type="file" id="avatar-file" accept="image/*" hidden>
+      </div>
+      <div class="modal-actions">
+        <button class="btn primary" id="btn-profile-save" type="button">Save</button>
+        <button class="btn ghost" id="btn-profile-cancel" type="button">Cancel</button>
+      </div>
     </div>
   </div>
 

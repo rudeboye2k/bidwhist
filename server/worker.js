@@ -105,8 +105,9 @@ export class GameRoom {
       let r, token;
       if (msg.token && this.room.seatOf(msg.token) != null) {
         r = this.room.reclaim(msg.token); token = msg.token;
+        this.room.setProfile(token, msg.name, msg.avatar); // refresh on reconnect
       } else {
-        r = this.room.join(msg.name); token = r.token;
+        r = this.room.join(msg.name, msg.avatar); token = r.token;
       }
       if (r.error) return this._send(ws, { type: 'error', error: r.error });
       meta.token = token;
@@ -121,6 +122,7 @@ export class GameRoom {
     if (msg.type === 'start') out = this.room.start(meta.token);
     else if (msg.type === 'nextHand') out = this.room.nextHand(meta.token);
     else if (msg.type === 'intent') out = this.room.submit(meta.token, msg.intent);
+    else if (msg.type === 'profile') out = this.room.setProfile(meta.token, msg.name, msg.avatar) || { events: [] };
     else if (msg.type === 'leave') { this.room.leave(meta.token); out = { events: [] }; }
     else return this._send(ws, { type: 'error', error: 'unknown-type' });
 

@@ -22,9 +22,97 @@
       const s = G.view.seats[seat];
       return (s && s.name) || 'Player';
     }
+    if (seat === 0 && G.profile && G.profile.name) return G.profile.name;
     return NAMES[seat];
   }
   function seatVerb(seat, base) { return seat === G.viewSeat ? base : base + 's'; }
+
+  // ---- profile & avatars ----------------------------------------------------
+  // Your name + avatar, saved locally. The avatar is always a small image data
+  // URL (an uploaded photo, or a rendered cartoon) so it shares cleanly online.
+
+  const PROFILE_KEY = 'bidwhist.profile';
+  const CARTOONS = ['🦊','🐼','🐵','🐸','🐯','🦁','🐰','🐨','🐷','🐮','🐔','🐧','🐙','🦄','🐲','🐺','🦉','🐱','🐶','🐹','🐗','🦝','🐻','🦖','🐳','🦓','🐴','🐝'];
+  const PALETTE = [
+    ['#f0932b','#eb4d4b'], ['#22a6b3','#6ab04c'], ['#e056fd','#686de0'],
+    ['#f9ca24','#f0932b'], ['#7ed6df','#30336b'], ['#eb4d4b','#6c5ce7'],
+    ['#badc58','#009432'], ['#ff7979','#b53471'], ['#f6b93b','#0a3d62'],
+    ['#e77f67','#cf6a87'], ['#3dc1d3','#182c61'], ['#ffb8b8','#3742fa'],
+  ];
+
+  function hashStr(s) {
+    let h = 2166136261 >>> 0; s = String(s);
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+  function cartoonFor(seed) {
+    const h = hashStr(seed);
+    const p = PALETTE[(h >>> 8) % PALETTE.length];
+    return { emoji: CARTOONS[h % CARTOONS.length], c1: p[0], c2: p[1] };
+  }
+  function randomCartoon() {
+    const emoji = CARTOONS[Math.floor(Math.random() * CARTOONS.length)];
+    const p = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+    return { emoji, c1: p[0], c2: p[1] };
+  }
+  // Render a cartoon spec to a small PNG data URL (so it travels online).
+  function cartoonImage(spec) {
+    const S = 96, c = document.createElement('canvas'); c.width = c.height = S;
+    const x = c.getContext('2d');
+    const g = x.createLinearGradient(0, 0, S, S);
+    g.addColorStop(0, spec.c1); g.addColorStop(1, spec.c2);
+    x.fillStyle = g; x.fillRect(0, 0, S, S);
+    x.font = '58px serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText(spec.emoji, S / 2, S / 2 + 4);
+    return c.toDataURL('image/png');
+  }
+  // Cover-crop an uploaded image to a small JPEG data URL.
+  function processAvatarFile(file) {
+    return new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const S = 96, c = document.createElement('canvas'); c.width = c.height = S;
+          const x = c.getContext('2d');
+          const scale = Math.max(S / img.width, S / img.height);
+          const w = img.width * scale, h = img.height * scale;
+          x.drawImage(img, (S - w) / 2, (S - h) / 2, w, h);
+          res(c.toDataURL('image/jpeg', 0.7));
+        };
+        img.onerror = rej; img.src = fr.result;
+      };
+      fr.onerror = rej; fr.readAsDataURL(file);
+    });
+  }
+
+  function loadProfile() {
+    try {
+      const p = JSON.parse(localStorage.getItem(PROFILE_KEY));
+      if (p && p.name && p.avatar) return p;
+    } catch (_) { /* fall through */ }
+    return { name: 'You', avatar: cartoonImage(randomCartoon()) }; // random cartoon by default
+  }
+  function saveProfile(p) {
+    try { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); } catch (_) { /* ignore */ }
+  }
+
+  // Avatar to draw for a seat: an image for the local player / online players,
+  // a name-derived cartoon for solo AI seats and avatarless online seats.
+  function avatarSpecFor(seat) {
+    if (G.mode === 'online' && G.view && G.view.seats) {
+      const s = G.view.seats[seat];
+      if (s && s.avatar) return { img: s.avatar };
+      return cartoonFor(((s && s.name) || 'seat') + '#' + seat);
+    }
+    if (seat === 0) return { img: G.profile.avatar };
+    return cartoonFor(NAMES[seat] + '#' + seat);
+  }
+  function applyAvatar(el, spec) {
+    if (!el) return;
+    if (spec.img) { el.style.backgroundImage = `url("${spec.img}")`; el.textContent = ''; }
+    else { el.style.backgroundImage = `linear-gradient(135deg, ${spec.c1}, ${spec.c2})`; el.textContent = spec.emoji; }
+  }
 
   const STORAGE_KEY = 'bidwhist.rules';
 
@@ -57,6 +145,7 @@
     viewSeat: 0,                 // this client's server seat (0 for local)
     view: null,                  // last server snapshot (online)
     net: null,                   // Net controller (online)
+    profile: loadProfile(),      // { name, avatar } saved locally
   };
 
   // ---- logging & messages ---------------------------------------------------
@@ -198,6 +287,7 @@
     for (let seat = 0; seat < 4; seat++) {
       const plate = $('plate-' + slot(seat));
       if (!plate) continue;
+      applyAvatar(plate.querySelector('.avatar'), avatarSpecFor(seat));
       const nameEl = plate.querySelector('.pname');
       const roleEl = plate.querySelector('.prole');
       if (nameEl) nameEl.textContent = seatName(seat);
@@ -453,10 +543,10 @@
     const dealt = E.deal(E.shuffle(E.newDeck()));
     G.hands = dealt.hands; G.kitty = dealt.kitty;
 
-    log(`— Hand ${G.handNo}. <b>${NAMES[G.dealer]}</b> deal${G.dealer === 0 ? '' : 's'}. —`, true);
+    log(`— Hand ${G.handNo}. <b>${seatName(G.dealer)}</b> deal${G.dealer === 0 ? '' : 's'}. —`, true);
     renderScores(); renderContractLine(); renderBidChips();
     renderOppHands(); renderKitty('back'); renderHand();
-    renderSeatsMeta(null);
+    renderPlates(); renderSeatsMeta(null);
     tableMsg('');
 
     await wait(600);
@@ -655,8 +745,8 @@
     stamp.className = 'stamp ' + (winner === 0 ? 'made' : 'set');
     stamp.textContent = winner === 0 ? 'GAME' : 'BUSTED';
     $('gameover-title').textContent = winner === 0
-      ? 'You and Marcus take the game!'
-      : 'Pearl and Deacon take the game.';
+      ? `${seatName(0)} and ${seatName(2)} take the game!`
+      : `${seatName(1)} and ${seatName(3)} take the game.`;
     $('gameover-body').innerHTML =
       `Final score: Us <b>${G.scores[0]}</b> · Them <b>${G.scores[1]}</b> after ${G.handNo} hand${G.handNo > 1 ? 's' : ''}.`;
     log(winner === 0 ? '<b>Game — Us.</b>' : '<b>Game — Them.</b>', true);
@@ -685,29 +775,39 @@
 
   function openOnlineSetup() {
     $('online-error').textContent = '';
-    $('online-name').value = (localStorage.getItem('bidwhist.name') || '').slice(0, 16);
     $('online-server').value = Net.serverBase();
+    renderOnlineProfile();
     $('modal-online').classList.add('show');
   }
 
+  // Show the current player (avatar + name) in the online setup.
+  function renderOnlineProfile() {
+    applyAvatar($('online-avatar'), { img: G.profile.avatar });
+    $('online-pname').textContent = G.profile.name;
+  }
+  function renderSplashProfile() {
+    applyAvatar($('splash-avatar'), { img: G.profile.avatar });
+    $('splash-pname').textContent = G.profile.name;
+  }
+
   async function hostTable() {
-    const base = readServer(); const name = readName();
+    const base = readServer();
     if (!base) return;
     setOnlineError('Creating table…');
     try {
       const code = await Net.newCode(base);
-      connectRoom(base, code, name, true);
+      connectRoom(base, code, true);
     } catch (e) {
       setOnlineError('Could not reach the server. Check the URL. (' + (e.message || e) + ')');
     }
   }
 
   function joinTable() {
-    const base = readServer(); const name = readName();
+    const base = readServer();
     const code = ($('join-code').value || '').trim().toUpperCase();
     if (!base) return;
     if (!/^[A-Z0-9]{3,6}$/.test(code)) return setOnlineError('Enter a valid game key.');
-    connectRoom(base, code, name, false);
+    connectRoom(base, code, false);
   }
 
   function readServer() {
@@ -716,21 +816,21 @@
     Net.saveServer(base);
     return base;
   }
-  function readName() {
-    const name = ($('online-name').value || '').trim().slice(0, 16) || 'Player';
-    try { localStorage.setItem('bidwhist.name', name); } catch (_) { /* ignore */ }
-    return name;
-  }
   function setOnlineError(msg) { $('online-error').textContent = msg || ''; }
 
-  function connectRoom(base, code, name, isHost) {
-    Object.assign(Online, { base, code, name, isHost, queue: [], draining: false, started: false });
+  function connectRoom(base, code, isHost) {
+    Object.assign(Online, { base, code, isHost, queue: [], draining: false, started: false });
     let saved = null;
     try { saved = localStorage.getItem(tokenKey(code)); } catch (_) { /* ignore */ }
     Online.token = saved;
     setOnlineError('Connecting…');
     Online.conn = Net.connect(base, code, {
-      onOpen() { Online.conn.send({ type: 'hello', name, token: saved || undefined }); },
+      onOpen() {
+        Online.conn.send({
+          type: 'hello', name: G.profile.name, avatar: G.profile.avatar,
+          token: saved || undefined,
+        });
+      },
       onMessage: onServerMessage,
       onClose() { if (Online.started) $('modal-disconnect').classList.add('show'); },
       onError() { setOnlineError('Connection error. Check the server URL.'); },
@@ -925,14 +1025,20 @@
     view.seats.forEach((s) => {
       const li = document.createElement('li');
       li.className = 'team-' + (s.team === 0 ? 'a' : 'b');
-      const name = s.kind === 'empty' ? '—' : (s.you ? 'You' : (s.name || 'Player'));
+      const av = document.createElement('span');
+      av.className = 'avatar';
+      if (s.kind === 'empty') { av.classList.add('seat-empty'); av.textContent = seatLetter[s.seat]; }
+      else applyAvatar(av, s.avatar ? { img: s.avatar } : cartoonFor((s.name || 'seat') + '#' + s.seat));
+      const nm = document.createElement('span');
+      nm.className = 'r-name';
+      nm.textContent = s.kind === 'empty' ? '— open —' : (s.you ? 'You' : (s.name || 'Player'));
+      li.appendChild(av); li.appendChild(nm);
       const tag = s.you ? '<span class="r-tag you">you</span>'
         : s.isHost ? '<span class="r-tag host">host</span>'
         : s.kind === 'ai' ? '<span class="r-tag">bot</span>'
         : s.kind === 'empty' ? '<span class="r-tag">open</span>'
         : (!s.connected ? '<span class="r-tag">away</span>' : '');
-      li.innerHTML = `<span class="seat-dot">${seatLetter[s.seat]}</span>` +
-        `<span class="r-name">${name}</span>${tag}`;
+      if (tag) li.insertAdjacentHTML('beforeend', tag);
       roster.appendChild(li);
     });
     $('btn-start-online').style.display = view.hostToken ? '' : 'none';
@@ -972,6 +1078,35 @@
     btn.textContent = Online.isHost ? 'Run It Back' : 'Waiting for host…';
     btn.disabled = !Online.isHost;
     $('modal-gameover').classList.add('show');
+  }
+
+  // ---- profile editor -------------------------------------------------------
+
+  let editorImg = null;      // pending uploaded image data URL
+  let editorCartoon = null;  // pending cartoon spec (overrides the image)
+
+  function openProfileEditor() {
+    editorImg = G.profile.avatar;
+    editorCartoon = null;
+    $('profile-name').value = G.profile.name === 'You' ? '' : G.profile.name;
+    refreshProfilePreview();
+    $('modal-profile').classList.add('show');
+  }
+  function refreshProfilePreview() {
+    applyAvatar($('profile-preview'), editorCartoon || { img: editorImg || G.profile.avatar });
+  }
+  function saveProfileFromEditor() {
+    const name = ($('profile-name').value || '').trim().slice(0, 16) || 'You';
+    let avatar = G.profile.avatar;
+    if (editorCartoon) avatar = cartoonImage(editorCartoon);
+    else if (editorImg) avatar = editorImg;
+    G.profile = { name, avatar };
+    saveProfile(G.profile);
+    $('modal-profile').classList.remove('show');
+    renderPlates();
+    renderOnlineProfile();
+    renderSplashProfile();
+    if (G.mode === 'online' && Online.conn) Online.conn.send({ type: 'profile', name, avatar });
   }
 
   // ---- settings -------------------------------------------------------------
@@ -1042,14 +1177,32 @@
   });
   $('btn-reconnect').addEventListener('click', () => {
     $('modal-disconnect').classList.remove('show');
-    connectRoom(Online.base, Online.code, Online.name, Online.isHost);
+    connectRoom(Online.base, Online.code, Online.isHost);
   });
   $('btn-quit-online').addEventListener('click', () => location.reload());
   $('btn-settings').addEventListener('click', () => { settingsToForm(); $('modal-settings').classList.add('show'); });
   $('btn-settings-done').addEventListener('click', () => { formToSettings(); $('modal-settings').classList.remove('show'); });
+
+  // Profile editor wiring.
+  $('btn-profile').addEventListener('click', openProfileEditor);
+  $('btn-edit-profile').addEventListener('click', openProfileEditor);
+  $('splash-profile').addEventListener('click', openProfileEditor);
+  $('btn-profile-cancel').addEventListener('click', () => $('modal-profile').classList.remove('show'));
+  $('btn-profile-save').addEventListener('click', saveProfileFromEditor);
+  $('btn-upload-avatar').addEventListener('click', () => $('avatar-file').click());
+  $('btn-shuffle-avatar').addEventListener('click', () => { editorCartoon = randomCartoon(); editorImg = null; refreshProfilePreview(); });
+  $('avatar-file').addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try { editorImg = await processAvatarFile(file); editorCartoon = null; refreshProfilePreview(); }
+    catch (_) { /* ignore unreadable image */ }
+    e.target.value = '';
+  });
   $('btn-rules').addEventListener('click', () => $('modal-howto').classList.add('show'));
   $('btn-howto-done').addEventListener('click', () => $('modal-howto').classList.remove('show'));
 
   renderScores();
+  renderPlates(); // show the profile + AI avatars before the first deal
+  renderSplashProfile();
   actionHint('Waiting on the deal…');
 })();

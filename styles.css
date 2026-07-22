@@ -119,13 +119,25 @@ body {
 .seat-east  { right: 30px; top: 50%; transform: translateY(-50%); }
 
 .nameplate {
-  display: flex; flex-direction: column; align-items: center; line-height: 1.15;
+  display: flex; flex-direction: row; align-items: center; gap: 9px; line-height: 1.15;
   background: rgba(10, 26, 19, .72); border: 1px solid rgba(212,169,78,.35);
-  border-radius: 10px; padding: 5px 16px; backdrop-filter: blur(2px);
+  border-radius: 12px; padding: 5px 14px 5px 7px; backdrop-filter: blur(2px);
   transition: box-shadow .25s, border-color .25s;
 }
+.nameplate .np-text { display: flex; flex-direction: column; align-items: flex-start; }
 .nameplate .pname { font-family: var(--font-display); font-size: 16px; font-weight: 600; color: var(--cream); }
 .nameplate .prole { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--gold-dim); }
+
+/* avatars — cartoon emoji on a gradient, or an uploaded photo (cover). */
+.avatar {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  display: grid; place-items: center; font-size: 18px; line-height: 1;
+  background: #3a2a44 center / cover no-repeat;
+  border: 1.5px solid rgba(212, 169, 78, .55); overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,.45); user-select: none;
+}
+.avatar.big { width: 56px; height: 56px; font-size: 30px; }
+.avatar.huge { width: 92px; height: 92px; font-size: 48px; border-width: 2px; }
 .nameplate.turn { border-color: var(--gold-bright); box-shadow: 0 0 18px rgba(240,205,120,.5); }
 .nameplate.dealer .prole::after { content: " · dealer"; color: var(--gold-bright); }
 
@@ -400,6 +412,16 @@ body {
 
 .splash-actions { display: flex; flex-direction: column; gap: 10px; align-items: center; }
 .splash-actions .btn { width: 100%; max-width: 280px; }
+.splash-profile {
+  display: inline-flex; align-items: center; gap: 10px; margin-top: 20px;
+  background: rgba(0,0,0,.25); border: 1px solid rgba(212,169,78,.3);
+  border-radius: 999px; padding: 6px 16px 6px 6px; cursor: pointer;
+  color: var(--cream-dim); font-size: 13px; font-family: var(--font-body);
+  transition: border-color .2s;
+}
+.splash-profile:hover { border-color: var(--gold-bright); }
+.splash-profile b { color: var(--cream); }
+.edit-link { color: var(--gold-bright); }
 
 .setting input[type="text"] {
   background: rgba(0,0,0,.4); color: var(--cream); border: 1px solid var(--gold-dim);
@@ -424,6 +446,19 @@ body {
 .code-input:focus { outline: none; border-color: var(--gold-bright); }
 .online-error { color: var(--bad); font-size: 12.5px; min-height: 18px; margin: 8px 0; }
 
+/* profile summary (in the online setup) + editor */
+.btn.small { font-size: 11px; padding: 6px 12px; }
+.profile-summary {
+  display: flex; align-items: center; gap: 14px; justify-content: flex-start;
+  background: rgba(0,0,0,.25); border: 1px solid rgba(212,169,78,.25);
+  border-radius: 14px; padding: 10px 14px; margin: 4px 0 14px;
+}
+.profile-summary-name { font-family: var(--font-display); font-size: 18px; color: var(--cream); flex: 1; text-align: left; }
+.profile-editor { display: flex; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 22px; }
+.profile-name { width: 100%; max-width: 280px; justify-content: space-between; }
+.profile-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.modal-actions { display: flex; gap: 10px; justify-content: center; }
+
 .code-badge {
   color: var(--gold-bright); background: rgba(0,0,0,.3); border: 1px solid var(--gold-dim);
   border-radius: 8px; padding: 2px 12px; font-size: 22px;
@@ -441,6 +476,7 @@ body {
 }
 .roster .team-a .seat-dot { background: rgba(212,169,78,.25); color: var(--gold-bright); }
 .roster .team-b .seat-dot { background: rgba(120,120,140,.2); color: var(--cream-dim); }
+.avatar.seat-empty { background: rgba(120,120,140,.18); border-style: dashed; color: var(--cream-dim); font-size: 13px; font-family: var(--font-display); }
 .roster .r-name { font-family: var(--font-display); font-size: 15px; color: var(--cream); flex: 1; }
 .roster .r-tag { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--gold-dim); }
 .roster .r-tag.you { color: var(--gold-bright); }

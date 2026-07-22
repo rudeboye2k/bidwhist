@@ -25,6 +25,17 @@
     return s;
   }
 
+  // Accept only small inline image data URLs; anything else falls back to a
+  // client-generated cartoon avatar. Caps abuse and per-message bloat.
+  function cleanAvatar(a) {
+    if (typeof a !== 'string' || a.length > 40000 || !/^data:image\//.test(a)) return null;
+    return a;
+  }
+  function cleanName(n, fallback) {
+    if (typeof n !== 'string' || !n.trim()) return fallback;
+    return n.trim().slice(0, 16);
+  }
+
   const DEFAULT_AI_NAMES = ['Pearl', 'Marcus', 'Deacon', 'Ruby'];
 
   class Room {
@@ -35,7 +46,7 @@
       this.rng = opts.rng || Math.random;
       this.phase = 'lobby';                 // lobby|bidding|declare|discard|playing|handover|gameover
       this.seats = [0, 1, 2, 3].map((i) => ({
-        seat: i, kind: 'empty', name: null, token: null, connected: false, ai: null,
+        seat: i, kind: 'empty', name: null, avatar: null, token: null, connected: false, ai: null,
       }));
       this.hostToken = null;
       this.scores = [0, 0];
@@ -52,17 +63,27 @@
       return s ? s.seat : null;
     }
 
-    join(name) {
+    join(name, avatar) {
       const spot = this.seats.find((s) => s.kind === 'empty');
       if (!spot) return { error: 'full' };
       const token = randId(16);
       spot.kind = 'human';
-      spot.name = (name || 'Player').slice(0, 16);
+      spot.name = cleanName(name, 'Player');
+      spot.avatar = cleanAvatar(avatar);
       spot.token = token;
       spot.connected = true;
       spot.ai = null;
       if (!this.hostToken) this.hostToken = token; // first to join hosts
       return { seat: spot.seat, token, host: this.hostToken === token };
+    }
+
+    // Update a seated player's name/avatar (e.g. they edited their profile).
+    setProfile(token, name, avatar) {
+      const s = this.seats.find((x) => x.token === token);
+      if (!s || s.kind !== 'human') return { error: 'no-seat' };
+      if (name !== undefined) s.name = cleanName(name, s.name);
+      if (avatar !== undefined) s.avatar = cleanAvatar(avatar);
+      return {};
     }
 
     reclaim(token) {
@@ -369,7 +390,7 @@
         trick: this.trick.map((p) => ({ seat: p.player, card: p.card })),
         counts: this.hands.map((h) => (h ? h.length : 0)),
         seats: this.seats.map((s) => ({
-          seat: s.seat, kind: s.kind, name: s.name,
+          seat: s.seat, kind: s.kind, name: s.name, avatar: s.avatar || null,
           connected: s.connected, team: s.seat % 2, isHost: this.hostToken === s.token,
           you: s.token === token && token != null,
         })),

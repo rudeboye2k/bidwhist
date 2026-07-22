@@ -12,6 +12,10 @@ online play is powered by a small Cloudflare Worker.
 - **Online with friends:** hit **Play Online** → **Host a Table**, share the game
   key, and your friends **Join** with it. Any empty seats are filled by the
   computer. This needs the backend deployed once — see [`server/`](server/).
+- **Your player:** set a **name and avatar** (upload a photo, or spin a random
+  cartoon) from the **Profile** chip on the splash or the Profile button. It
+  shows on your seat in both solo and online play; online, everyone at the table
+  sees each other's.
 - **Hosting the static site:** it's just files, so any static host works —
   GitHub Pages (Settings → Pages → deploy from `main`) or Cloudflare Pages
   (build command: none, output dir `/`). See `_headers` for the Cloudflare
