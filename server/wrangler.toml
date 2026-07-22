@@ -1,0 +1,22 @@
+# Cloudflare Worker + Durable Objects backend for Bid Whist online play.
+# Deploy from this folder:  cd server && npx wrangler deploy
+# (Durable Objects require the Workers Paid plan.)
+
+name = "bidwhist-server"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+# One Durable Object class = one authoritative game room per join code.
+[[durable_objects.bindings]]
+name = "GAME_ROOM"
+class_name = "GameRoom"
+
+# SQLite-backed DO storage (required for new Durable Object classes).
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameRoom"]
+
+# Optional: pin a route on your own domain instead of *.workers.dev
+# [[routes]]
+# pattern = "bidwhist-api.example.com"
+# custom_domain = true
