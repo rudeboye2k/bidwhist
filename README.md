@@ -1,14 +1,46 @@
 # Bid Whist
 
-A complete, playable **Bid Whist** game in the browser — you and your AI partner
-Marcus against Pearl and Deacon. Plain HTML/CSS/JavaScript with no build step:
-open `index.html` and play, or host it on GitHub Pages.
+A complete, playable **Bid Whist** game in the browser. Play the computer solo,
+or deal your friends in online — each game is its own private table with a game
+key to share. Plain HTML/CSS/JavaScript with no build step for the game itself;
+online play is powered by a small Cloudflare Worker.
 
 ## Play it
 
-- **Locally:** open `index.html` in any modern browser. No install, no server.
-- **GitHub Pages:** repo Settings → Pages → deploy from the `main` branch root,
-  and the game will be live at `https://<user>.github.io/bidwhist/`.
+- **Solo (vs computer):** open `index.html` in any modern browser, or visit the
+  hosted site, and hit **Play the Computer**. No install, no server.
+- **Online with friends:** hit **Play Online** → **Host a Table**, share the game
+  key, and your friends **Join** with it. Any empty seats are filled by the
+  computer. This needs the backend deployed once — see [`server/`](server/).
+- **Hosting the static site:** it's just files, so any static host works —
+  GitHub Pages (Settings → Pages → deploy from `main`) or Cloudflare Pages
+  (build command: none, output dir `/`). See `_headers` for the Cloudflare
+  caching/security headers.
+
+## Playing with others online
+
+One player **hosts** and gets a 5-character game key (e.g. `HURLQ`). Everyone
+else picks **Join** and enters that key. Seats nobody takes are played by the
+adaptive AI, so a table of one human + three bots and a table of four humans use
+the exact same game. You can run **any number of tables at once** — each game
+key is a completely separate room, so games never bleed into each other. If you
+drop, your browser remembers your seat and can reconnect to the same table.
+
+The backend is a Cloudflare Worker + Durable Objects (one isolated object per
+game key). Deploy instructions and the full protocol are in
+[`server/README.md`](server/README.md). With no backend configured the game
+still runs fully in solo mode.
+
+## The computer learns as you play
+
+In solo play the table adapts across a session (`js/ai.js`). It isn't a neural
+net — under Bid Whist's scoring the honest truth is that a made contract already
+scores *all* books over six, so a well-tuned static bidder is near the ceiling.
+Instead the AI runs a self-correcting bid calibrator that **stays neutral while
+play is healthy** (verified harmless by a paired simulation) and pulls its
+aggression back when the table keeps getting set, plus a per-seat **read on your
+bidding** that it voices at the table. It gets smarter about *you*, without ever
+degrading its normal play.
 
 ## The game
 
@@ -57,20 +89,26 @@ impossible rather than penalized.
 ## Code layout
 
 ```
-index.html      app shell
-styles.css      the whole look — felt, mahogany, gold, cream card stock
-js/engine.js    pure rules engine (deck, bids, ranking, tricks, scoring)
-js/ai.js        heuristic AI: hand evaluation, bidding, discards, play
-js/app.js       game flow state machine + DOM rendering
-tests/          engine test suite and AI-vs-AI simulator
+index.html          app shell (table, lobby, modals)
+styles.css          the whole look — felt, mahogany, gold, cream card stock
+js/engine.js        pure rules engine (deck, bids, ranking, tricks, scoring)
+js/ai.js            heuristic AI + session learner
+js/net.js           WebSocket transport for online play
+js/app.js           game flow, DOM rendering, and the online controller
+server/room-core.js authoritative game state machine (shared by the backend)
+server/worker.js    Cloudflare Worker + Durable Object (WebSocket transport)
+server/wrangler.toml deploy config
+tests/              engine tests, AI-vs-AI simulator, room-core tests
 ```
 
-`engine.js` and `ai.js` are dependency-free and load in both the browser and
-Node, so the exact code the game runs is what the tests exercise:
+`engine.js`, `ai.js`, and `server/room-core.js` are dependency-free and load in
+both the browser and Node, so the exact code the game (and the server) runs is
+what the tests exercise:
 
 ```sh
-node tests/engine.test.js    # 37 rules invariants
-node tests/simulate.js 500   # full AI-vs-AI hands; asserts no illegal plays
+node tests/engine.test.js    # rules invariants
+node tests/simulate.js 400   # paired AI sim: learner is harmless + responsive
+node tests/room.test.js      # authoritative room: turns, card hiding, isolation
 ```
 
 Key engine formulas: a contract needs `6 + bid` books; defenders set it at

@@ -6,9 +6,25 @@
   const AI = window.AI;
 
   const NAMES = ['You', 'Pearl', 'Marcus', 'Deacon'];
-  const TEAM_NAME = ['Us', 'Them'];
   const $ = (id) => document.getElementById(id);
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // Seat rotation: the local player always sits South. In local play viewSeat is
+  // 0 (identity); online it's whatever seat the server gave us, so every server
+  // seat is drawn at screen slot (serverSeat - viewSeat) mod 4 — 0 south (me),
+  // 1 west, 2 north (partner), 3 east.
+  function slot(seat) { return (seat - G.viewSeat + 4) % 4; }
+  function myTeam() { return G.viewSeat % 2; }
+  function teamLabel(team) { return team === myTeam() ? 'Us' : 'Them'; }
+  function seatName(seat) {
+    if (G.mode === 'online' && G.view && G.view.seats) {
+      if (seat === G.viewSeat) return 'You';
+      const s = G.view.seats[seat];
+      return (s && s.name) || 'Player';
+    }
+    return NAMES[seat];
+  }
+  function seatVerb(seat, base) { return seat === G.viewSeat ? base : base + 's'; }
 
   const STORAGE_KEY = 'bidwhist.rules';
 
@@ -37,6 +53,10 @@
     discardPicks: new Set(),
     running: false,
     learner: AI.createLearner(), // adapts across hands within this session
+    mode: 'local',               // 'local' | 'online'
+    viewSeat: 0,                 // this client's server seat (0 for local)
+    view: null,                  // last server snapshot (online)
+    net: null,                   // Net controller (online)
   };
 
   // ---- logging & messages ---------------------------------------------------
@@ -98,18 +118,19 @@
   }
 
   function renderScores() {
-    $('score-us').textContent = G.scores[0];
-    $('score-them').textContent = G.scores[1];
+    const us = myTeam(), them = 1 - us;
+    $('score-us').textContent = G.scores[us];
+    $('score-them').textContent = G.scores[them];
     $('score-target').textContent = 'first to ' + G.rules.gameTarget;
-    $('books-us').textContent = G.books[0];
-    $('books-them').textContent = G.books[1];
+    $('books-us').textContent = G.books[us];
+    $('books-them').textContent = G.books[them];
   }
 
   function renderContractLine() {
     const line = $('contract-line');
     if (!G.contract) { line.textContent = 'No contract yet'; $('set-meter').innerHTML = ''; return; }
     const c = G.contract;
-    const who = G.highSeat === 0 ? 'You' : NAMES[G.highSeat];
+    const who = seatName(G.highSeat);
     let desc = c.amount + ' ' +
       (c.type === 'notrump'
         ? 'No-Trump (' + (c.direction === 'uptown' ? 'high' : 'low') + ')'
@@ -125,23 +146,28 @@
     const defTeam = 1 - bidTeam;
     const needed = 6 + G.contract.amount;
     const toSet = E.booksToSet(G.contract.amount);
+    const defIsUs = defTeam === myTeam();
     if (G.books[bidTeam] >= needed) {
       m.innerHTML = `<span class="safe">Contract made — every extra book scores.</span>`;
     } else if (G.books[defTeam] >= toSet) {
-      m.innerHTML = `<span class="danger">The bid is set — ${TEAM_NAME[defTeam]} stopped it.</span>`;
+      m.innerHTML = `<span class="danger">The bid is set — ${teamLabel(defTeam)} stopped it.</span>`;
     } else {
       m.innerHTML =
-        `${TEAM_NAME[bidTeam]} need <b>${needed - G.books[bidTeam]}</b> more to make it. ` +
-        `<span class="${defTeam === 0 ? 'safe' : 'danger'}">${TEAM_NAME[defTeam]} need ` +
+        `${teamLabel(bidTeam)} need <b>${needed - G.books[bidTeam]}</b> more to make it. ` +
+        `<span class="${defIsUs ? 'safe' : 'danger'}">${teamLabel(defTeam)} need ` +
         `<b>${toSet - G.books[defTeam]}</b> to set.</span>`;
     }
   }
 
+  // Render every server seat except mine (slot 0) as face-down backs at its slot.
   function renderOppHands() {
-    for (const seat of [1, 2, 3]) {
-      const box = $('opp-hand-' + seat);
-      box.innerHTML = '';
-      const n = G.hands ? G.hands[seat].length : 0;
+    for (const p of [1, 2, 3]) { const box = $('opp-hand-' + p); if (box) box.innerHTML = ''; }
+    if (!G.hands) return;
+    for (let seat = 0; seat < 4; seat++) {
+      if (seat === G.viewSeat) continue;
+      const box = $('opp-hand-' + slot(seat));
+      if (!box) continue;
+      const n = G.hands[seat] ? G.hands[seat].length : 0;
       for (let i = 0; i < n; i++) box.appendChild(cardEl(null, false));
     }
   }
@@ -157,18 +183,44 @@
   }
 
   function renderSeatsMeta(turnSeat) {
-    for (let s = 0; s < 4; s++) {
-      const plate = $('plate-' + s);
-      plate.classList.toggle('turn', turnSeat === s);
-      plate.classList.toggle('dealer', G.dealer === s);
+    for (let seat = 0; seat < 4; seat++) {
+      const plate = $('plate-' + slot(seat));
+      if (!plate) continue;
+      plate.classList.toggle('turn', turnSeat === seat);
+      plate.classList.toggle('dealer', G.dealer === seat);
+    }
+  }
+
+  // Names/roles per slot. Static in local mode; driven by the roster online
+  // (partner across from you, opponents left/right, AI + disconnect flags).
+  const SLOT_ROLE = ['south', 'west', 'partner', 'east'];
+  function renderPlates() {
+    for (let seat = 0; seat < 4; seat++) {
+      const plate = $('plate-' + slot(seat));
+      if (!plate) continue;
+      const nameEl = plate.querySelector('.pname');
+      const roleEl = plate.querySelector('.prole');
+      if (nameEl) nameEl.textContent = seatName(seat);
+      if (roleEl) {
+        let role = seat === G.viewSeat ? 'you'
+          : seat === (G.viewSeat + 2) % 4 ? 'your partner' : SLOT_ROLE[slot(seat)];
+        if (G.mode === 'online' && G.view && G.view.seats) {
+          const s = G.view.seats[seat];
+          if (s && s.kind === 'ai') role += ' · bot';
+          else if (s && s.kind === 'human' && !s.connected) role += ' · away';
+        }
+        roleEl.textContent = role;
+      }
+      plate.classList.toggle('you', seat === G.viewSeat);
     }
   }
 
   function renderBidChips() {
-    for (let s = 0; s < 4; s++) {
-      const chip = $('chip-' + s);
-      const bid = G.bids[s];
-      if (!bid) { chip.classList.remove('show'); chip.innerHTML = ''; continue; }
+    for (let p = 0; p < 4; p++) { const c = $('chip-' + p); if (c) { c.classList.remove('show'); c.innerHTML = ''; } }
+    for (let seat = 0; seat < 4; seat++) {
+      const chip = $('chip-' + slot(seat));
+      const bid = G.bids[seat];
+      if (!chip || !bid) continue;
       chip.classList.add('show');
       chip.innerHTML = bid.pass
         ? '<span class="chip-pass">pass</span>'
@@ -179,8 +231,8 @@
   function renderHand() {
     const box = $('hand');
     box.innerHTML = '';
-    if (!G.hands) return;
-    const cards = E.sortHand(G.hands[0], sortDirection());
+    if (!G.hands || !G.hands[G.viewSeat]) return;
+    const cards = E.sortHand(G.hands[G.viewSeat], sortDirection());
     const overlap = cards.length > 13 ? -40 : -26;
     box.style.setProperty('--overlap', overlap + 'px');
     cards.forEach((card, i) => {
@@ -200,14 +252,14 @@
 
   function addPlayedCard(seat, card) {
     const wrap = document.createElement('div');
-    wrap.className = 'played from-' + seat;
+    wrap.className = 'played from-' + slot(seat);
     wrap.appendChild(cardEl(card, true));
     $('trick').appendChild(wrap);
   }
 
   async function collectTrick(winnerSeat) {
     const t = $('trick');
-    t.classList.add('collect', 'to-' + winnerSeat);
+    t.classList.add('collect', 'to-' + slot(winnerSeat));
     await wait(520);
     t.className = 'trick';
     t.innerHTML = '';
@@ -293,7 +345,7 @@
     bar.innerHTML = '<div class="action-hint">Name your trump:</div>';
     const row = document.createElement('div'); row.className = 'bid-group';
     for (const s of E.SUITS) {
-      const count = G.hands[0].filter((c) => c.suit === s).length;
+      const count = G.hands[G.viewSeat].filter((c) => c.suit === s).length;
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'chipbtn wide';
       b.style.color = (s === 'H' || s === 'D') ? '#e0705f' : '';
@@ -324,7 +376,7 @@
     const auto = document.createElement('button');
     auto.type = 'button'; auto.className = 'btn ghost'; auto.textContent = 'Auto-pick';
     auto.addEventListener('click', () => {
-      G.discardPicks = new Set(AI.chooseDiscards(G.hands[0], G.contract).map((c) => c.id));
+      G.discardPicks = new Set(AI.chooseDiscards(G.hands[G.viewSeat], G.contract).map((c) => c.id));
       renderHand(); updateDiscardBar();
     });
     const done = document.createElement('button');
@@ -549,17 +601,18 @@
     stamp.textContent = res.made ? (boston ? 'BOSTON!' : 'BID MADE') : 'SET!';
 
     $('summary-title').textContent =
-      `${NAMES[G.highSeat]} bid ${E.describeBid(G.high)}`;
+      `${seatName(G.highSeat)} bid ${E.describeBid(G.high)}`;
     const deltaCls = (isUs ? res.delta >= 0 : res.delta < 0) ? 'pos' : 'neg';
+    const us = myTeam(), them = 1 - us;
     $('summary-body').innerHTML =
-      `${TEAM_NAME[bidTeam]} took <b>${G.books[bidTeam]}</b> of 13 books` +
+      `${teamLabel(bidTeam)} took <b>${G.books[bidTeam]}</b> of 13 books` +
       (G.rules.kittyIsBook ? ' (kitty included)' : '') +
       ` — needed <b>${res.needed}</b>.` +
-      `<span class="delta ${deltaCls}">${res.delta >= 0 ? '+' : ''}${res.delta} ${TEAM_NAME[bidTeam]}</span>` +
-      `Score: Us <b>${G.scores[0]}</b> · Them <b>${G.scores[1]}</b>`;
+      `<span class="delta ${deltaCls}">${res.delta >= 0 ? '+' : ''}${res.delta} ${teamLabel(bidTeam)}</span>` +
+      `Score: Us <b>${G.scores[us]}</b> · Them <b>${G.scores[them]}</b>`;
     log(res.made
-      ? `<b>${TEAM_NAME[bidTeam]}</b> make it: ${res.delta >= 0 ? '+' : ''}${res.delta}.`
-      : `<b>${TEAM_NAME[bidTeam]}</b> get set: ${res.delta}.`, true);
+      ? `<b>${teamLabel(bidTeam)}</b> make it: ${res.delta >= 0 ? '+' : ''}${res.delta}.`
+      : `<b>${teamLabel(bidTeam)}</b> get set: ${res.delta}.`, true);
 
     // The table learns from the hand. Calibrate off the AI's own declared hands
     // (not the human's), and always update the per-seat read on every player.
@@ -597,6 +650,309 @@
     startHand();
   }
 
+  // ---- online play ----------------------------------------------------------
+  // The server owns the game. We render its per-player snapshots, animate the
+  // event stream, and — on our turn — reuse the very same input panels as local
+  // play by pointing G.resolve at an intent-sender instead of a local promise.
+
+  const Online = {
+    base: '', code: '', name: '', token: null, isHost: false,
+    conn: null, queue: [], draining: false, started: false,
+  };
+
+  function tokenKey(code) { return 'bidwhist.token.' + code; }
+
+  function openOnlineSetup() {
+    $('online-error').textContent = '';
+    $('online-name').value = (localStorage.getItem('bidwhist.name') || '').slice(0, 16);
+    $('online-server').value = Net.serverBase();
+    $('modal-online').classList.add('show');
+  }
+
+  async function hostTable() {
+    const base = readServer(); const name = readName();
+    if (!base) return;
+    setOnlineError('Creating table…');
+    try {
+      const code = await Net.newCode(base);
+      connectRoom(base, code, name, true);
+    } catch (e) {
+      setOnlineError('Could not reach the server. Check the URL. (' + (e.message || e) + ')');
+    }
+  }
+
+  function joinTable() {
+    const base = readServer(); const name = readName();
+    const code = ($('join-code').value || '').trim().toUpperCase();
+    if (!base) return;
+    if (!/^[A-Z0-9]{3,6}$/.test(code)) return setOnlineError('Enter a valid game key.');
+    connectRoom(base, code, name, false);
+  }
+
+  function readServer() {
+    const base = ($('online-server').value || '').trim().replace(/\/$/, '');
+    if (!/^https?:\/\//.test(base)) { setOnlineError('Enter your server URL (https://…workers.dev).'); return ''; }
+    Net.saveServer(base);
+    return base;
+  }
+  function readName() {
+    const name = ($('online-name').value || '').trim().slice(0, 16) || 'Player';
+    try { localStorage.setItem('bidwhist.name', name); } catch (_) { /* ignore */ }
+    return name;
+  }
+  function setOnlineError(msg) { $('online-error').textContent = msg || ''; }
+
+  function connectRoom(base, code, name, isHost) {
+    Object.assign(Online, { base, code, name, isHost, queue: [], draining: false, started: false });
+    let saved = null;
+    try { saved = localStorage.getItem(tokenKey(code)); } catch (_) { /* ignore */ }
+    Online.token = saved;
+    setOnlineError('Connecting…');
+    Online.conn = Net.connect(base, code, {
+      onOpen() { Online.conn.send({ type: 'hello', name, token: saved || undefined }); },
+      onMessage: onServerMessage,
+      onClose() { if (Online.started) $('modal-disconnect').classList.add('show'); },
+      onError() { setOnlineError('Connection error. Check the server URL.'); },
+    });
+  }
+
+  function onServerMessage(msg) {
+    if (msg.type === 'welcome') {
+      Online.token = msg.token;
+      Online.isHost = !!msg.host;
+      try { localStorage.setItem(tokenKey(Online.code), msg.token); } catch (_) { /* ignore */ }
+      G.mode = 'online';
+      G.viewSeat = msg.seat != null ? msg.seat : 0;
+      G.running = true;
+      setOnlineError('');
+      $('modal-online').classList.remove('show');
+      return;
+    }
+    if (msg.type === 'error') {
+      const human = {
+        full: 'That table is full.', 'not-host': 'Only the host can do that.',
+        'not-your-turn': 'Hold on — not your turn.', 'illegal-bid': 'That bid isn\'t legal.',
+        'illegal-play': 'You can\'t play that card.',
+      }[msg.error] || ('Server: ' + msg.error);
+      if (!Online.started) setOnlineError(human); else tableMsg(human);
+      return;
+    }
+    if (msg.type === 'state') {
+      Online.queue.push(msg);
+      drainOnline();
+    }
+  }
+
+  async function drainOnline() {
+    if (Online.draining) return;
+    Online.draining = true;
+    while (Online.queue.length) {
+      const msg = Online.queue.shift();
+      G.view = msg.view; // expose the fresh roster so names resolve during animation
+      await animateEvents(msg.events || []);
+      applyView(msg.view);
+    }
+    Online.draining = false;
+  }
+
+  const PACE = { bid: 480, play: 560, trick: 820 };
+
+  async function animateEvents(events) {
+    for (const ev of events) {
+      switch (ev.t) {
+        case 'deal':
+          G.bids = [null, null, null, null];
+          G.dealer = ev.dealer; G.handNo = ev.handNo;
+          $('trick').innerHTML = '';
+          $('modal-summary').classList.remove('show');
+          $('modal-gameover').classList.remove('show');
+          tableMsg('');
+          break;
+        case 'bid':
+          G.bids[ev.seat] = ev.bid;
+          renderBidChips();
+          log(ev.bid.pass
+            ? `${seatName(ev.seat)} ${seatVerb(ev.seat, 'pass')}.`
+            : `<b>${seatName(ev.seat)}</b> ${seatVerb(ev.seat, 'bid')} <b>${E.describeBid(ev.bid)}</b>.`);
+          await wait(PACE.bid);
+          break;
+        case 'auction':
+          log(`<b>${seatName(ev.highSeat)}</b> won the auction at <b>${E.describeBid(ev.bid)}</b>.`, true);
+          break;
+        case 'throwin':
+          log('All four pass — cards go in. New deal.', true);
+          await wait(400);
+          break;
+        case 'declare': {
+          const c = ev.contract; G.contract = c; G.highSeat = ev.seat;
+          renderContractLine();
+          log(`<b>${seatName(ev.seat)}</b> ${c.type === 'notrump'
+            ? 'calls No-Trump, running ' + (c.direction === 'uptown' ? 'uptown' : 'downtown')
+            : 'names <b>' + E.SUIT_NAMES[c.trump] + '</b> trump, ' + c.type}.`, true);
+          break;
+        }
+        case 'kitty':
+          if (ev.sport && ev.cards) {
+            G.kitty = ev.cards; renderKitty('sported');
+            tableMsg(`${seatName(ev.seat)} sports the kitty.`);
+            await wait(1800); tableMsg('');
+          }
+          renderKitty('gone');
+          break;
+        case 'leadturn':
+          tableMsg(ev.seat === G.viewSeat ? 'You lead.' : seatName(ev.seat) + ' leads.');
+          break;
+        case 'play':
+          addPlayedCard(ev.seat, ev.card);
+          if (ev.seat !== G.viewSeat) { G.hands[ev.seat] && G.hands[ev.seat].pop(); renderOppHands(); }
+          tableMsg('');
+          await wait(PACE.play);
+          break;
+        case 'trick':
+          await wait(PACE.trick - PACE.play);
+          log(`<b>${seatName(ev.winner)}</b> ${seatVerb(ev.winner, 'take')} the book.`);
+          await collectTrick(ev.winner);
+          break;
+        case 'handend':
+          showOnlineSummary(ev.result);
+          await wait(300);
+          break;
+        case 'gameover':
+          showOnlineGameover(ev.winner, ev.scores);
+          await wait(200);
+          break;
+        default: break;
+      }
+    }
+  }
+
+  function applyView(view) {
+    G.view = view;
+    if (view.rules) G.rules = Object.assign({}, G.rules, view.rules);
+    G.scores = view.scores.slice();
+    G.books = view.books.slice();
+    G.handNo = view.handNo;
+    G.dealer = view.dealer;
+    G.highSeat = view.high ? view.high.seat : null;
+    G.high = view.high ? { amount: view.high.amount, type: view.high.type, _seat: view.high.seat } : null;
+    G.contract = view.contract;
+    G.bids = view.bids.slice();
+    G.hands = [0, 1, 2, 3].map((s) => {
+      if (view.you && s === view.you.seat) return view.you.hand;
+      const n = view.counts[s] || 0;
+      const arr = []; for (let i = 0; i < n; i++) arr.push({ id: 'b' + s + '_' + i, back: true });
+      return arr;
+    });
+    G.kitty = new Array(6).fill(null);
+
+    if (view.phase === 'lobby') { showLobby(view); return; }
+    Online.started = true;
+    $('splash').classList.remove('show');
+    $('modal-online').classList.remove('show');
+    $('modal-lobby').classList.remove('show');
+
+    renderScores(); renderContractLine(); renderPlates();
+    renderOppHands(); renderBidChips(); renderSeatsMeta(view.turn);
+    renderKitty(view.phase === 'bidding' ? 'back' : 'gone');
+    renderHand();
+    setupTurn(view);
+  }
+
+  function setupTurn(view) {
+    const mine = view.you && view.turn === view.you.seat && view.need;
+    if (!mine) {
+      G.awaiting = null; G.resolve = null; G.legalIds = new Set();
+      renderHand();
+      if (view.phase === 'handover') actionHint(view.result && view.hostToken ? 'Deal the next hand when ready.' : 'Hand over.');
+      else if (view.phase === 'gameover') actionHint('&nbsp;');
+      else actionHint(view.turn != null ? `Waiting on <b>${seatName(view.turn)}</b>…` : '&nbsp;');
+      return;
+    }
+    G._sent = false;
+    const send = (intent) => {
+      if (G._sent) return;
+      G._sent = true; G.resolve = null; G.awaiting = null; G.legalIds = new Set();
+      Online.conn.send({ type: 'intent', intent });
+      actionHint('&nbsp;'); renderHand();
+    };
+    if (view.need === 'bid') {
+      G.resolve = (bid) => send({ type: 'bid', bid });
+      showBidPanel(!!(view.you && view.you.mustBid));
+      tableMsg('Your call.');
+    } else if (view.need === 'declare-suit') {
+      G.resolve = (suit) => send({ type: 'declare', trump: suit });
+      showDeclareSuit();
+    } else if (view.need === 'declare-dir') {
+      G.resolve = (dir) => send({ type: 'declare', direction: dir });
+      showDeclareDirection();
+    } else if (view.need === 'discard') {
+      G.awaiting = 'discard'; G.discardPicks = new Set();
+      G.resolve = () => send({ type: 'discard', cardIds: [...G.discardPicks] });
+      renderHand(); showDiscardBar();
+    } else if (view.need === 'play') {
+      G.awaiting = 'play';
+      G.legalIds = new Set(view.you.legalIds || []);
+      G.resolve = (card) => send({ type: 'play', cardId: card.id });
+      renderHand(); actionHint('Your play.');
+    }
+  }
+
+  function showLobby(view) {
+    $('lobby-code').textContent = Online.code;
+    const roster = $('lobby-roster'); roster.innerHTML = '';
+    const seatLetter = ['S', 'W', 'N', 'E'];
+    view.seats.forEach((s) => {
+      const li = document.createElement('li');
+      li.className = 'team-' + (s.team === 0 ? 'a' : 'b');
+      const name = s.kind === 'empty' ? '—' : (s.you ? 'You' : (s.name || 'Player'));
+      const tag = s.you ? '<span class="r-tag you">you</span>'
+        : s.isHost ? '<span class="r-tag host">host</span>'
+        : s.kind === 'ai' ? '<span class="r-tag">bot</span>'
+        : s.kind === 'empty' ? '<span class="r-tag">open</span>'
+        : (!s.connected ? '<span class="r-tag">away</span>' : '');
+      li.innerHTML = `<span class="seat-dot">${seatLetter[s.seat]}</span>` +
+        `<span class="r-name">${name}</span>${tag}`;
+      roster.appendChild(li);
+    });
+    $('btn-start-online').style.display = view.hostToken ? '' : 'none';
+    $('lobby-wait').style.display = view.hostToken ? 'none' : '';
+    $('modal-online').classList.remove('show');
+    $('splash').classList.remove('show');
+    $('modal-lobby').classList.add('show');
+  }
+
+  function showOnlineSummary(r) {
+    const bidTeam = r.bidTeam;
+    const stamp = $('summary-stamp');
+    stamp.className = 'stamp ' + (r.made ? 'made' : 'set');
+    stamp.textContent = r.made ? (r.boston ? 'BOSTON!' : 'BID MADE') : 'SET!';
+    $('summary-title').textContent = `${seatName(r.highSeat)} bid ${E.describeBid(r.bid)}`;
+    const us = myTeam(), them = 1 - us;
+    const deltaCls = (bidTeam === myTeam() ? r.delta >= 0 : r.delta < 0) ? 'pos' : 'neg';
+    $('summary-body').innerHTML =
+      `${teamLabel(bidTeam)} took <b>${r.books[bidTeam]}</b> of 13 books — needed <b>${r.needed}</b>.` +
+      `<span class="delta ${deltaCls}">${r.delta >= 0 ? '+' : ''}${r.delta} ${teamLabel(bidTeam)}</span>` +
+      `Score: Us <b>${r.scores[us]}</b> · Them <b>${r.scores[them]}</b>`;
+    const btn = $('btn-next-hand');
+    btn.textContent = Online.isHost ? 'Deal Next Hand' : 'Waiting for host…';
+    btn.disabled = !Online.isHost;
+    $('modal-summary').classList.add('show');
+  }
+
+  function showOnlineGameover(winner, scores) {
+    const us = myTeam();
+    const iWon = winner === us;
+    const stamp = $('gameover-stamp');
+    stamp.className = 'stamp ' + (iWon ? 'made' : 'set');
+    stamp.textContent = iWon ? 'GAME' : 'BUSTED';
+    $('gameover-title').textContent = iWon ? 'Your team takes the game!' : 'The other team takes it.';
+    $('gameover-body').innerHTML = `Final: Us <b>${scores[us]}</b> · Them <b>${scores[1 - us]}</b>.`;
+    const btn = $('btn-rematch');
+    btn.textContent = Online.isHost ? 'Run It Back' : 'Waiting for host…';
+    btn.disabled = !Online.isHost;
+    $('modal-gameover').classList.add('show');
+  }
+
   // ---- settings -------------------------------------------------------------
 
   function settingsToForm() {
@@ -628,22 +984,46 @@
 
   $('btn-deal-in').addEventListener('click', () => {
     $('splash').classList.remove('show');
-    G.running = true;
+    G.mode = 'local'; G.viewSeat = 0; G.running = true;
     startHand();
   });
   $('btn-next-hand').addEventListener('click', () => {
     $('modal-summary').classList.remove('show');
+    if (G.mode === 'online') { if (Online.isHost) Online.conn.send({ type: 'nextHand' }); return; }
     G.dealer = (G.dealer + 1) % 4;
     startHand();
   });
   $('btn-rematch').addEventListener('click', () => {
     $('modal-gameover').classList.remove('show');
+    if (G.mode === 'online') { if (Online.isHost) Online.conn.send({ type: 'start' }); return; }
     newGame();
   });
   $('btn-new-game').addEventListener('click', () => {
     if (!G.running) return;
+    if (G.mode === 'online') { location.reload(); return; }
     if (confirm('Start a fresh game? Current scores will be wiped.')) newGame();
   });
+
+  // Online setup + lobby wiring.
+  $('btn-play-online').addEventListener('click', () => { $('splash').classList.remove('show'); openOnlineSetup(); });
+  $('btn-online-back').addEventListener('click', () => { $('modal-online').classList.remove('show'); $('splash').classList.add('show'); });
+  $('btn-host').addEventListener('click', hostTable);
+  $('btn-join').addEventListener('click', joinTable);
+  $('join-code').addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase(); });
+  $('btn-start-online').addEventListener('click', () => { if (Online.isHost) Online.conn.send({ type: 'start' }); });
+  $('btn-leave-online').addEventListener('click', () => {
+    try { Online.conn && Online.conn.send({ type: 'leave' }); Online.conn && Online.conn.close(); } catch (_) { /* ignore */ }
+    location.reload();
+  });
+  $('btn-copy-key').addEventListener('click', () => {
+    const done = () => { const b = $('btn-copy-key'); b.textContent = 'Copied!'; setTimeout(() => (b.textContent = 'Copy game key'), 1400); };
+    if (navigator.clipboard) navigator.clipboard.writeText(Online.code).then(done, done); else done();
+  });
+  $('btn-reconnect').addEventListener('click', () => {
+    $('modal-disconnect').classList.remove('show');
+    connectRoom(Online.base, Online.code, Online.name, Online.isHost);
+  });
+  $('btn-quit-online').addEventListener('click', () => location.reload());
   $('btn-settings').addEventListener('click', () => { settingsToForm(); $('modal-settings').classList.add('show'); });
   $('btn-settings-done').addEventListener('click', () => { formToSettings(); $('modal-settings').classList.remove('show'); });
   $('btn-rules').addEventListener('click', () => $('modal-howto').classList.add('show'));

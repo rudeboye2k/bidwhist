@@ -95,8 +95,66 @@
       <p class="splash-kicker">a rent-party classic</p>
       <h2 class="splash-title">Bid <em>Whist</em></h2>
       <p class="splash-copy">Four hands, two teams, one kitty. Bid your books, name your trump,
-        and run a Boston on &rsquo;em. You and Marcus against Pearl and Deacon.</p>
-      <button class="btn primary big" id="btn-deal-in" type="button">Deal Me In</button>
+        and run a Boston on &rsquo;em. Play the computer, or deal your friends in online.</p>
+      <div class="splash-actions">
+        <button class="btn primary big" id="btn-deal-in" type="button">Play the Computer</button>
+        <button class="btn ghost big" id="btn-play-online" type="button">Play Online</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Online setup -->
+  <div class="overlay" id="modal-online">
+    <div class="modal">
+      <h2 class="modal-title">Play Online</h2>
+      <p class="modal-note">Host a table and share the key, or join a friend&rsquo;s table with theirs.
+        Empty seats are played by the computer.</p>
+      <form id="online-form" class="settings" onsubmit="return false">
+        <label class="setting"><span>Your name</span>
+          <input type="text" id="online-name" maxlength="16" placeholder="You" autocomplete="off">
+        </label>
+        <label class="setting"><span>Server URL</span>
+          <input type="text" id="online-server" placeholder="https://bidwhist-server.…workers.dev" autocomplete="off">
+        </label>
+      </form>
+      <div class="online-split">
+        <div class="online-col">
+          <button class="btn primary" id="btn-host" type="button">Host a Table</button>
+          <p class="online-sub">You get a game key to share.</p>
+        </div>
+        <div class="online-col">
+          <div class="join-row">
+            <input type="text" id="join-code" class="code-input" maxlength="6" placeholder="KEY" autocomplete="off">
+            <button class="btn primary" id="btn-join" type="button">Join</button>
+          </div>
+          <p class="online-sub">Enter a friend&rsquo;s game key.</p>
+        </div>
+      </div>
+      <p class="online-error" id="online-error"></p>
+      <button class="btn ghost" id="btn-online-back" type="button">Back</button>
+    </div>
+  </div>
+
+  <!-- Room lobby (waiting to start) -->
+  <div class="overlay" id="modal-lobby">
+    <div class="modal">
+      <h2 class="modal-title">Table <span id="lobby-code" class="code-badge"></span></h2>
+      <p class="modal-note" id="lobby-note">Share the game key. Empty seats fill with the computer when you start.</p>
+      <button class="btn ghost copy-key" id="btn-copy-key" type="button">Copy game key</button>
+      <ul class="roster" id="lobby-roster"></ul>
+      <button class="btn primary big" id="btn-start-online" type="button">Start Game</button>
+      <p class="online-sub" id="lobby-wait">Waiting for the host to start&hellip;</p>
+      <button class="btn ghost" id="btn-leave-online" type="button">Leave Table</button>
+    </div>
+  </div>
+
+  <!-- Connection lost -->
+  <div class="overlay" id="modal-disconnect">
+    <div class="modal">
+      <h2 class="modal-title">Connection lost</h2>
+      <div class="summary-body" id="disconnect-body">The table dropped. You can try to rejoin.</div>
+      <button class="btn primary" id="btn-reconnect" type="button">Reconnect</button>
+      <button class="btn ghost" id="btn-quit-online" type="button">Back to Menu</button>
     </div>
   </div>
 
@@ -172,6 +230,7 @@
 
 <script src="js/engine.js"></script>
 <script src="js/ai.js"></script>
+<script src="js/net.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
