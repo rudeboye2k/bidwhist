@@ -146,6 +146,7 @@
     view: null,                  // last server snapshot (online)
     net: null,                   // Net controller (online)
     profile: loadProfile(),      // { name, avatar } saved locally
+    handResult: null,            // { highSeat, made, delta } shown on the seat
   };
 
   // ---- logging & messages ---------------------------------------------------
@@ -248,17 +249,11 @@
     }
   }
 
-  // Render every server seat except mine (slot 0) as face-down backs at its slot.
+  // Opponents' hidden hands aren't drawn — in Bid Whist everyone always holds
+  // the same number of cards, so card backs add nothing. Each seat is a clean
+  // player tag (avatar + name + bid) instead. Kept as a no-op so callers stand.
   function renderOppHands() {
     for (const p of [1, 2, 3]) { const box = $('opp-hand-' + p); if (box) box.innerHTML = ''; }
-    if (!G.hands) return;
-    for (let seat = 0; seat < 4; seat++) {
-      if (seat === G.viewSeat) continue;
-      const box = $('opp-hand-' + slot(seat));
-      if (!box) continue;
-      const n = G.hands[seat] ? G.hands[seat].length : 0;
-      for (let i = 0; i < n; i++) box.appendChild(cardEl(null, false));
-    }
   }
 
   function renderKitty(state) {
@@ -327,7 +322,10 @@
   }
 
   function renderBidChips() {
-    for (let p = 0; p < 4; p++) { const c = $('chip-' + p); if (c) { c.classList.remove('show'); c.innerHTML = ''; } }
+    for (let p = 0; p < 4; p++) {
+      const c = $('chip-' + p);
+      if (c) { c.classList.remove('show', 'chip-made', 'chip-set'); c.innerHTML = ''; }
+    }
     for (let seat = 0; seat < 4; seat++) {
       const chip = $('chip-' + slot(seat));
       if (!chip) continue;
@@ -335,6 +333,13 @@
       if (html == null) continue;
       chip.classList.add('show');
       chip.innerHTML = html;
+      // At hand's end, mark the declarer's seat made or set, right on the board.
+      if (G.handResult && seat === G.handResult.highSeat) {
+        const r = G.handResult;
+        chip.classList.add(r.made ? 'chip-made' : 'chip-set');
+        chip.insertAdjacentHTML('beforeend',
+          ` <span class="chip-result">${r.made ? 'made' : 'set'} ${r.delta >= 0 ? '+' : ''}${r.delta}</span>`);
+      }
     }
   }
 
@@ -538,6 +543,7 @@
     G.books = [0, 0];
     G.memory = new Set();
     G.discardPicks = new Set();
+    G.handResult = null;
     $('trick').innerHTML = '';
 
     const dealt = E.deal(E.shuffle(E.newDeck()));
@@ -704,6 +710,8 @@
     const res = E.scoreHand(G.contract.amount, G.contract, G.books[bidTeam], G.rules);
     G.scores[bidTeam] += res.delta;
     renderScores();
+    G.handResult = { highSeat: G.highSeat, made: res.made, delta: res.delta };
+    renderBidChips(); // stamp made/set on the declarer's seat
 
     const boston = G.books[bidTeam] === 13;
     const stamp = $('summary-stamp');
@@ -883,6 +891,7 @@
       switch (ev.t) {
         case 'deal':
           G.bids = [null, null, null, null];
+          G.handResult = null;
           G.dealer = ev.dealer; G.handNo = ev.handNo;
           $('trick').innerHTML = '';
           $('modal-summary').classList.remove('show');
@@ -935,6 +944,8 @@
           await collectTrick(ev.winner);
           break;
         case 'handend':
+          G.handResult = { highSeat: ev.result.highSeat, made: ev.result.made, delta: ev.result.delta };
+          renderBidChips();
           showOnlineSummary(ev.result);
           await wait(300);
           break;

@@ -113,10 +113,12 @@ body {
 /* seats */
 
 .seat { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.seat-north { top: 26px; left: 50%; transform: translateX(-50%); }
+/* Fixed width so the nameplate doesn't shift when a bid chip appears/grows. */
+.seat-north, .seat-west, .seat-east { width: 210px; }
+.seat-north { top: 46px; left: 50%; transform: translateX(-50%); }
 .seat-south { bottom: 18px; left: 50%; transform: translateX(-50%); width: 100%; }
-.seat-west  { left: 30px; top: 50%; transform: translateY(-50%); }
-.seat-east  { right: 30px; top: 50%; transform: translateY(-50%); }
+.seat-west  { left: 24px; top: 50%; transform: translateY(-50%); }
+.seat-east  { right: 24px; top: 50%; transform: translateY(-50%); }
 
 .nameplate {
   display: flex; flex-direction: row; align-items: center; gap: 9px; line-height: 1.15;
@@ -141,22 +143,18 @@ body {
 .nameplate.turn { border-color: var(--gold-bright); box-shadow: 0 0 18px rgba(240,205,120,.5); }
 .nameplate.dealer .prole::after { content: " · dealer"; color: var(--gold-bright); }
 
-/* opponent card backs */
-
-.opp-hand { display: flex; justify-content: center; }
-.opp-hand .card { width: 34px; height: 48px; margin: 0 -12px; border-radius: 5px; }
-.opp-hand.vertical { flex-direction: column; align-items: center; }
-.opp-hand.vertical .card { margin: -30px 0; transform: rotate(90deg); }
+/* Opponents' hands aren't drawn — each seat is a clean player tag. */
+.opp-hand { display: none; }
 
 /* bid chips — a solid badge that sits above the card backs so a bid is always
    readable, even next to the tall side stacks. */
 
 .bid-chip {
-  position: relative; z-index: 8; max-width: 220px;
+  position: relative; z-index: 8; max-width: 194px; text-align: center; line-height: 1.35;
   font-family: var(--font-display); font-size: 13.5px; font-style: italic;
   color: var(--gold-bright); text-shadow: 0 1px 5px rgba(0,0,0,.8);
   background: rgba(8, 22, 16, .92); border: 1px solid rgba(212, 169, 78, .5);
-  border-radius: 999px; padding: 4px 13px; white-space: nowrap;
+  border-radius: 13px; padding: 4px 13px;
   opacity: 0; transform: translateY(4px); transition: opacity .3s ease, transform .3s ease;
   box-shadow: 0 3px 10px rgba(0,0,0,.45);
 }
@@ -167,12 +165,12 @@ body {
 .bid-chip .chip-suit.red { color: #ef7a68; }
 .bid-chip .chip-suit.blk { color: #f0e7d2; }
 
-/* Nudge the west/east badges inboard so long contract labels never clip the
-   table edge, and drop them clear below the vertical card stacks. */
-.seat-west .bid-chip { transform: translate(54px, 4px); }
-.seat-west .bid-chip.show { transform: translate(54px, 0); }
-.seat-east .bid-chip { transform: translate(-54px, 4px); }
-.seat-east .bid-chip.show { transform: translate(-54px, 0); }
+/* Made / set stamp on the declarer's seat at hand end. */
+.bid-chip.chip-made { border-color: rgba(127, 201, 127, .8); box-shadow: 0 0 14px rgba(127,201,127,.3), 0 3px 10px rgba(0,0,0,.45); }
+.bid-chip.chip-set { border-color: rgba(224, 112, 95, .85); box-shadow: 0 0 14px rgba(224,112,95,.35), 0 3px 10px rgba(0,0,0,.45); }
+.bid-chip .chip-result { font-style: normal; font-weight: 700; }
+.bid-chip.chip-made .chip-result { color: var(--good); }
+.bid-chip.chip-set .chip-result { color: var(--bad); }
 
 /* center: kitty + trick */
 
