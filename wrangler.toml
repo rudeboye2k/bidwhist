@@ -11,6 +11,18 @@ name = "bidwhist"
 main = "server/worker.js"
 compatibility_date = "2025-10-01"
 
+# Custom domains (bought via Cloudflare Registrar, so the zone is on this
+# account). On deploy, Cloudflare creates the DNS records and HTTPS
+# certificates for these automatically. The site and the game server share the
+# origin, so whichever address a player opens is also the server.
+routes = [
+  { pattern = "givemedakitty.com", custom_domain = true },
+  { pattern = "www.givemedakitty.com", custom_domain = true },
+]
+# Keep bidwhist.<subdomain>.workers.dev live too, so links and QR codes that
+# were already shared keep working.
+workers_dev = true
+
 # The static game (index.html, styles.css, js/, _headers) is served straight
 # from the repo root; .assetsignore keeps server code, tests and docs out.
 # Requests that don't match a file (i.e. /api/*) fall through to the Worker.

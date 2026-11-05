@@ -819,3 +819,24 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
 .team-card .roster .r-name { flex: 1 1 auto; min-width: 3ch; }
 .team-card .roster .r-tag { flex-shrink: 0; font-size: 9px; letter-spacing: .12em; }
 .cap-star { color: var(--gold-bright); margin-right: 4px; font-size: 12px; }
+
+/* ---------- host seat controls (lobby) ---------- */
+.teams-hint.active { color: var(--gold-bright); font-style: normal; font-weight: 600; }
+.team-card .roster li.assignable { cursor: pointer; transition: border-color .15s, background .15s; }
+@media (hover: hover) and (pointer: fine) {
+  .team-card .roster li.assignable:hover { border-color: rgba(240,205,120,.6); }
+}
+.team-card .roster li.picked {
+  border-color: var(--gold-bright); background: rgba(240,205,120,.14);
+  box-shadow: 0 0 0 1px var(--gold-bright) inset;
+}
+.team-card .roster li.drop-target { border-style: dashed; border-color: rgba(240,205,120,.55); }
+.seat-act {
+  flex-shrink: 0; margin-left: auto; font-family: var(--font-body); font-size: 10px; font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--gold-bright);
+  background: rgba(0,0,0,.35); border: 1px solid var(--gold-dim); border-radius: 999px;
+  padding: 5px 8px; cursor: pointer; min-height: 28px; white-space: nowrap;
+}
+.team-card .roster li.assignable { padding-right: 6px; }
+.seat-act:hover { border-color: var(--gold-bright); }
+#modal-gameover #btn-to-lobby { margin-top: 10px; }

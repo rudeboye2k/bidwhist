@@ -137,6 +137,10 @@ export class GameRoom {
     else if (msg.type === 'profile') out = this.room.setProfile(meta.token, msg.name, msg.avatar) || { events: [] };
     else if (msg.type === 'team') out = this.room.chooseTeam(meta.token, msg.team);
     else if (msg.type === 'teamName') out = this.room.setTeamName(meta.token, msg.team, msg.name);
+    else if (msg.type === 'seatSwap') out = this.room.hostSwap(meta.token, msg.a, msg.b);
+    else if (msg.type === 'addBot') out = this.room.addBot(meta.token, msg.seat);
+    else if (msg.type === 'kickBot') out = this.room.kickBot(meta.token, msg.seat);
+    else if (msg.type === 'toLobby') out = this.room.toLobby(meta.token);
     else if (msg.type === 'leave') {
       out = this.room.leave(meta.token);       // mid-game: a bot takes the seat
       ws.serializeAttachment({ token: null }); // this socket no longer holds a seat

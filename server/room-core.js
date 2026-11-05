@@ -177,6 +177,72 @@
       return {};
     }
 
+    // ---- host lobby controls -------------------------------------------------
+    // Only the host (or whoever holds host powers while they're away) can
+    // rearrange the table before the deal.
+
+    _hostLobbyCheck(token) {
+      if (token !== this.effectiveHost()) return { error: 'not-host' };
+      if (this.phase !== 'lobby') return { error: 'lobby-only' };
+      return null;
+    }
+
+    // Swap whatever sits in seats a and b (players, bots or open seats).
+    // Moving someone across teams changes their partner; captains follow.
+    hostSwap(token, a, b) {
+      const bad = this._hostLobbyCheck(token); if (bad) return bad;
+      if (![a, b].every((n) => Number.isInteger(n) && n >= 0 && n <= 3)) return { error: 'bad-seat' };
+      if (a === b) return {};
+      const A = this.seats[a], B = this.seats[b];
+      const keys = ['kind', 'name', 'avatar', 'token', 'connected', 'ai', 'left', 'joinedTeamAt'];
+      const tmp = {}; for (const k of keys) tmp[k] = A[k];
+      for (const k of keys) A[k] = B[k];
+      for (const k of keys) B[k] = tmp[k];
+      if (a % 2 !== b % 2) {                       // crossed teams: count as joining now
+        if (A.kind === 'human') A.joinedTeamAt = ++this.joinSeq;
+        if (B.kind === 'human') B.joinedTeamAt = ++this.joinSeq;
+      }
+      this._updateCaptains();
+      return {};
+    }
+
+    _botName() {
+      const used = new Set(this.seats.map((x) => x.name));
+      return DEFAULT_AI_NAMES.find((n) => !used.has(n)) || ('Bot ' + (this.seats.filter((x) => x.kind === 'ai').length + 1));
+    }
+
+    addBot(token, seat) {
+      const bad = this._hostLobbyCheck(token); if (bad) return bad;
+      const s = this.seats[seat];
+      if (!s) return { error: 'bad-seat' };
+      if (s.kind !== 'empty') return { error: 'seat-taken' };
+      Object.assign(s, { kind: 'ai', name: this._botName(), avatar: null, token: null, connected: false, left: false });
+      return {};
+    }
+
+    // Remove a bot so the seat opens for a person to join.
+    kickBot(token, seat) {
+      const bad = this._hostLobbyCheck(token); if (bad) return bad;
+      const s = this.seats[seat];
+      if (!s) return { error: 'bad-seat' };
+      if (s.kind !== 'ai') return { error: 'not-a-bot' };
+      Object.assign(s, { kind: 'empty', name: null, avatar: null, token: null, connected: false, ai: null, left: false });
+      return {};
+    }
+
+    // After a game ends, the host can reopen the lobby: seats, bots and team
+    // names are kept, scores reset, and open seats can take new players.
+    toLobby(token) {
+      if (token !== this.effectiveHost()) return { error: 'not-host' };
+      if (this.phase !== 'gameover' && this.phase !== 'handover') return { error: 'bad-phase' };
+      this.phase = 'lobby';
+      this.scores = [0, 0];
+      this.handNo = 0;
+      this._resetHand();
+      for (const s of this.seats) if (s.kind === 'ai') s.left = false;
+      return { events: [{ t: 'lobby' }] };
+    }
+
     // Captain = the current captain if still a human on the team, else the
     // human who has been on that team the longest.
     _updateCaptains() {
@@ -212,12 +278,12 @@
       if (token !== this.effectiveHost()) return { error: 'not-host' };
       if (this.phase !== 'lobby' && this.phase !== 'handover' && this.phase !== 'gameover')
         return { error: 'in-progress' };
-      let aiN = 0;
       for (const s of this.seats) {
         if (s.kind === 'empty') {
           s.kind = 'ai';
-          s.name = DEFAULT_AI_NAMES[aiN++ % DEFAULT_AI_NAMES.length];
+          s.name = this._botName();
           s.token = null;
+          s.avatar = null;
         }
       }
       if (this.phase === 'gameover') { this.scores = [0, 0]; this.handNo = 0; }

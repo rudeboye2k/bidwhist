@@ -215,5 +215,41 @@ check('rooms have distinct codes', r1.code !== r2.code);
   check('host away → another connected player gets host powers', r.effectiveHost() === b.token);
 }
 
+// ---- host lobby controls: assign seats, add / kick bots, back to lobby ----
+{
+  const r = new Room('HOSTC', {}, { rng: seeded(51) });
+  const host = r.join('Hal');              // seat 0, Team A
+  const amy = r.join('Amy');               // seat 1, Team B
+  check('non-host cannot rearrange seats', r.hostSwap(amy.token, 0, 1).error === 'not-host');
+  check('host adds a bot to a chosen seat', !r.addBot(host.token, 3).error && r.seats[3].kind === 'ai');
+  check('bot names are unique', new Set(r.seats.filter((s) => s.name).map((s) => s.name)).size === r.seats.filter((s) => s.name).length);
+  check('cannot add a bot to a taken seat', r.addBot(host.token, 1).error === 'seat-taken');
+  // host makes Amy their partner: move Amy into seat 2 (Team A)
+  check('host moves Amy to partner them', !r.hostSwap(host.token, 1, 2).error && r.seatOf(amy.token) === 2);
+  check('Amy keeps her identity after the move', r.reclaim(amy.token).seat === 2);
+  check('host can swap a bot and a player', !r.hostSwap(host.token, 3, 0).error && r.seatOf(host.token) === 3 && r.seats[0].kind === 'ai');
+  r.hostSwap(host.token, 0, 3); // put host back in seat 0
+  check('host kicks a bot to open the seat', !r.kickBot(host.token, 3).error && r.seats[3].kind === 'empty');
+  check('kicking a person is not allowed', r.kickBot(host.token, 2).error === 'not-a-bot');
+  const late = r.join('Lou');
+  check('a late player takes the opened seat', r.seatOf(late.token) === 1 || r.seatOf(late.token) === 3);
+  // play to game over, return to lobby, kick a bot, someone new joins
+  r.rules.gameTarget = 1;
+  r.start(host.token);
+  check('seat controls are lobby-only', r.kickBot(host.token, 1).error === 'lobby-only');
+  let g = 0;
+  while (r.phase !== 'gameover' && g++ < 20000) {
+    if (r.phase === 'handover') { r.nextHand(host.token); continue; }
+    const tok = [host, amy, late].find((x) => r.seatOf(x.token) === r.turn);
+    if (!tok || !autoAct(r, tok.token)) break;
+  }
+  check('game finished', r.phase === 'gameover');
+  check('host returns the table to the lobby', !r.toLobby(host.token).error && r.phase === 'lobby' && r.scores[0] === 0 && r.scores[1] === 0);
+  const botSeat = r.seats.find((s) => s.kind === 'ai').seat;
+  r.kickBot(host.token, botSeat);
+  const newbie = r.join('Neo');
+  check('after a game, a kicked bot\'s seat goes to a newcomer', r.seatOf(newbie.token) === botSeat);
+}
+
 if (failures) { console.error('\n' + failures + ' failure(s)'); process.exit(1); }
 console.log('\nAll room-core tests passed.');

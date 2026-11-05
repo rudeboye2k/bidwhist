@@ -1052,6 +1052,9 @@
           showOnlineSummary(ev.result);
           await wait(300);
           break;
+        case 'lobby':
+          log('Back in the lobby — rearrange seats, then start a new game.', true);
+          break;
         case 'botTakeover':
           log(`<b>${ev.name || 'A player'}</b> left the table — a bot takes the seat.`, true);
           break;
@@ -1086,7 +1089,13 @@
     });
     G.kitty = new Array(6).fill(null);
 
-    if (view.phase === 'lobby') { showLobby(view); return; }
+    if (view.phase === 'lobby') {
+      $('modal-summary').classList.remove('show');
+      $('modal-gameover').classList.remove('show');
+      $('trick').innerHTML = '';
+      G.handResult = null; G.contract = null;
+      showLobby(view); return;
+    }
     Online.started = true;
     $('splash').classList.remove('show');
     $('modal-online').classList.remove('show');
@@ -1142,6 +1151,7 @@
   // on a team is its captain and gets an editable team name.
   const teamNameInputs = {};
   let pendingLobby = null; // a lobby update that arrived while the captain was typing
+  let hostPick = null;     // host seat-assign: the seat tapped first
   function teamNameInput(team) {
     if (teamNameInputs[team]) return teamNameInputs[team];
     const inp = document.createElement('input');
@@ -1167,6 +1177,14 @@
     if (window.QRCode) QRCode.render($('lobby-qr'), link);
     const box = $('lobby-teams');
     box.innerHTML = '';
+    if (hostPick !== null && (!view.hostToken || hostPick > 3)) hostPick = null;
+    const pickName = hostPick !== null ? (view.seats[hostPick].you ? 'yourself' : (view.seats[hostPick].name || 'the open seat')) : '';
+    $('teams-hint').textContent = !view.hostToken
+      ? 'Pick a team to choose your partner. The first player on a team is its captain and names it.'
+      : hostPick !== null
+        ? `Now tap the seat to move ${pickName} to (tap again to cancel).`
+        : 'You’re the host: tap a player, then tap a seat to move them. Add or kick bots to open seats for friends.';
+    $('teams-hint').classList.toggle('active', hostPick !== null);
     const me = view.seats.find((x) => x.you);
     const myTeamNow = me ? me.team : null;
     for (const team of [0, 1]) {
@@ -1198,14 +1216,34 @@
         if (s.kind === 'empty') { av.classList.add('seat-empty'); av.textContent = '+'; }
         else applyAvatar(av, avatarFrom(s.avatar, (s.name || 'seat') + '#' + s.seat));
         const nm = document.createElement('span'); nm.className = 'r-name';
-        nm.textContent = s.kind === 'empty' ? 'Open seat' : (s.you ? 'You' : (s.name || 'Player'));
+        nm.textContent = s.kind === 'empty' ? (view.hostToken ? 'Open' : 'Open seat') : (s.you ? 'You' : (s.name || 'Player'));
         if (s.seat === info.captainSeat) { nm.insertAdjacentHTML('afterbegin', '<span class="cap-star" title="Team captain">★</span>'); }
         li.appendChild(av); li.appendChild(nm);
         const tags = [];
         if (s.isHost) tags.push('<span class="r-tag host">host</span>');
-        if (s.kind === 'ai') tags.push('<span class="r-tag">bot</span>');
+        if (s.kind === 'ai' && !view.hostToken) tags.push('<span class="r-tag">bot</span>'); // host sees a Kick button instead
         else if (s.kind === 'human' && !s.connected) tags.push('<span class="r-tag">away</span>');
         li.insertAdjacentHTML('beforeend', tags.join(''));
+        if (view.hostToken) {
+          // Host: tap a seat, then another, to swap them; add or kick bots.
+          li.classList.add('assignable');
+          if (hostPick === s.seat) li.classList.add('picked');
+          else if (hostPick !== null) li.classList.add('drop-target');
+          li.addEventListener('click', () => {
+            if (hostPick === null) hostPick = s.seat;
+            else if (hostPick === s.seat) hostPick = null;
+            else { Online.conn && Online.conn.send({ type: 'seatSwap', a: hostPick, b: s.seat }); hostPick = null; }
+            showLobby(G.view);
+          });
+          const act = (label, type) => {
+            const b = document.createElement('button');
+            b.type = 'button'; b.className = 'seat-act'; b.textContent = label;
+            b.addEventListener('click', (e) => { e.stopPropagation(); hostPick = null; Online.conn && Online.conn.send({ type, seat: s.seat }); });
+            li.appendChild(b);
+          };
+          if (s.kind === 'ai') act('Kick', 'kickBot');
+          else if (s.kind === 'empty') act('+ Bot', 'addBot');
+        }
         ul.appendChild(li);
       }
       card.appendChild(ul);
@@ -1259,6 +1297,7 @@
     const btn = $('btn-rematch');
     btn.textContent = amHost() ? 'Run It Back' : 'Waiting for host…';
     btn.disabled = !amHost();
+    $('btn-to-lobby').hidden = !amHost();
     $('modal-gameover').classList.add('show');
   }
 
@@ -1331,6 +1370,10 @@
     if (G.mode === 'online') { if (amHost()) Online.conn.send({ type: 'nextHand' }); return; }
     G.dealer = (G.dealer + 1) % 4;
     startHand();
+  });
+  $('btn-to-lobby').addEventListener('click', () => {
+    $('modal-gameover').classList.remove('show');
+    if (G.mode === 'online' && amHost()) Online.conn.send({ type: 'toLobby' });
   });
   $('btn-rematch').addEventListener('click', () => {
     $('modal-gameover').classList.remove('show');

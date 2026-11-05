@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Libre+Franklin:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=5">
+<link rel="stylesheet" href="styles.css?v=6">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♠</text></svg>">
 </head>
 <body>
@@ -276,20 +276,21 @@
       <h2 class="modal-title" id="gameover-title"></h2>
       <div class="summary-body" id="gameover-body"></div>
       <button class="btn primary big" id="btn-rematch" type="button">Run It Back</button>
+      <button class="btn ghost" id="btn-to-lobby" type="button" hidden>Back to Lobby</button>
     </div>
   </div>
 </div>
 
-<script src="js/engine.js?v=5"></script>
-<script src="js/ai.js?v=5"></script>
+<script src="js/engine.js?v=6"></script>
+<script src="js/ai.js?v=6"></script>
 <script>
   // The site and the game server are one Cloudflare Worker, so the server is
   // simply this page's own address — nothing to configure. Only if you host the
   // page somewhere else (e.g. GitHub Pages) would you point it at the Worker:
   // window.BIDWHIST_SERVER = "https://bidwhist.<your-subdomain>.workers.dev";
 </script>
-<script src="js/qrcode.js?v=5"></script>
-<script src="js/net.js?v=5"></script>
-<script src="js/app.js?v=5"></script>
+<script src="js/qrcode.js?v=6"></script>
+<script src="js/net.js?v=6"></script>
+<script src="js/app.js?v=6"></script>
 </body>
 </html>

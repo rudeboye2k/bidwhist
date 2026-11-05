@@ -67,6 +67,9 @@ Client → server:
 | `{type:'profile', name?, avatar?}` | update your display name / avatar mid-session |
 | `{type:'team', team}` | lobby only — move to Team A (`0`) or B (`1`); this picks your partner |
 | `{type:'teamName', team, name}` | team captain only (first player on the team) — rename it (≤ 18 chars) |
+| `{type:'seatSwap', a, b}` | host, lobby only — swap seats `a` and `b` (players, bots or open seats) |
+| `{type:'addBot', seat}` / `{type:'kickBot', seat}` | host, lobby only — put a bot in an open seat / remove one |
+| `{type:'toLobby'}` | host, after a game — reopen the lobby (seats kept, scores reset) |
 | `{type:'leave'}` | give up your seat — mid-game a bot takes it for good and plays at once |
 
 A dropped connection (no `leave`) also hands the seat to a bot immediately,

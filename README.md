@@ -16,6 +16,8 @@ online play is powered by a small Cloudflare Worker.
   cartoon) from the **Profile** chip on the splash or the Profile button. It
   shows on your seat in both solo and online play; online, everyone at the table
   sees each other's.
+- **Live at [givemedakitty.com](https://givemedakitty.com)** (and `www.`), as well
+  as the original `bidwhist.<subdomain>.workers.dev` address.
 - **Hosting:** one Cloudflare Worker (`wrangler.toml` at the repo root) serves
   both the game and the online server. Cloudflare's GitHub integration
   auto-deploys it on every push to `main`, so there's nothing to run by hand.
@@ -37,6 +39,12 @@ which is how you choose your partner. The first player on a team is its
 **captain** and names it (only the captain can); team names then replace
 "Us/Them" on the scoreboard and in results. Teams lock when the game starts,
 and any open seat is filled by a bot.
+
+**Host controls.** In the lobby the host can **tap a player, then tap a seat**
+to move them (swap seats, set partners), **+ Bot** an open seat, or **Kick** a
+bot to open the seat for a friend. After a game ends, **Back to Lobby** keeps
+everyone seated (scores reset) so the host can kick a bot and let a late
+arrival join with the same game key.
 
 **When someone leaves.** A bot takes their seat immediately and plays on —
 even if it was their turn — so the table never stalls. Tapping **Leave Table**
