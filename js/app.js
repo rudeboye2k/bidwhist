@@ -1405,8 +1405,8 @@
     $('btn-copy-link').classList.replace('primary', 'ghost');
     $('btn-share-link').addEventListener('click', () => {
       navigator.share({
-        title: 'Bid Whist',
-        text: `Pull up a chair — join my Bid Whist table. Game key: ${Online.code}`,
+        title: 'Give Me Da Kitty',
+        text: `Pull up a chair — Give Me Da Kitty 🃏 · Bid Whist with your crew. Game key: ${Online.code}`,
         url: inviteLink(Online.code),
       }).catch(() => { /* cancelled */ });
     });

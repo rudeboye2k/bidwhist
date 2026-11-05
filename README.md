@@ -1,6 +1,8 @@
-# Bid Whist
+# Give Me Da Kitty — Bid Whist
 
-A complete, playable **Bid Whist** game in the browser. Play the computer solo,
+*Bid it. Win the kitty. Run a Boston.*
+
+**Give Me Da Kitty** is a complete, playable **Bid Whist** game in the browser. Play the computer solo,
 or deal your friends in online — each game is its own private table with a game
 key to share. Plain HTML/CSS/JavaScript with no build step for the game itself;
 online play is powered by a small Cloudflare Worker.
@@ -18,6 +20,9 @@ online play is powered by a small Cloudflare Worker.
   sees each other's.
 - **Live at [givemedakitty.com](https://givemedakitty.com)** (and `www.`), as well
   as the original `bidwhist.<subdomain>.workers.dev` address.
+- **Branding:** page title, link-preview card (`img/og-card.png`, shown when
+  the link is texted or posted), and home-screen icons (`img/`,
+  `manifest.webmanifest` — saved to a phone it's called **Da Kitty**).
 - **Hosting:** one Cloudflare Worker (`wrangler.toml` at the repo root) serves
   both the game and the online server. Cloudflare's GitHub integration
   auto-deploys it on every push to `main`, so there's nothing to run by hand.
@@ -145,7 +150,9 @@ impossible rather than penalized.
 ## Code layout
 
 ```
-index.html          app shell (table, lobby, modals)
+index.html          app shell (table, lobby, modals) + link-preview meta
+manifest.webmanifest home-screen app name/icons
+img/                link-preview card and app icons
 styles.css          the whole look — felt, mahogany, gold, cream card stock
 js/engine.js        pure rules engine (deck, bids, ranking, tricks, scoring)
 js/ai.js            heuristic AI + session learner

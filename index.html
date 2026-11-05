@@ -7,23 +7,41 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Bid Whist">
+<meta name="apple-mobile-web-app-title" content="Da Kitty">
+<meta name="application-name" content="Da Kitty">
 <meta name="format-detection" content="telephone=no">
-<title>Bid Whist — Uptown &amp; Downtown</title>
-<meta name="description" content="Classic partnership Bid Whist: bidding, jokers, the kitty, uptown and downtown — you and a partner against two rivals.">
+<title>Give Me Da Kitty — Play Bid Whist Online</title>
+<meta name="description" content="Give Me Da Kitty: classic partnership Bid Whist in your browser. Bid it, win the kitty, run a Boston — play the computer or deal your crew in online with a game key.">
+<link rel="canonical" href="https://givemedakitty.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Give Me Da Kitty">
+<meta property="og:url" content="https://givemedakitty.com/">
+<meta property="og:title" content="Give Me Da Kitty — Bid Whist with your crew">
+<meta property="og:description" content="Pull up a chair. Bid it, win the kitty, run a Boston — play the computer or deal your friends in online.">
+<meta property="og:image" content="https://givemedakitty.com/img/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Give Me Da Kitty — Bid Whist online. A fan of playing cards topped by the kitty on green felt.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Give Me Da Kitty — Bid Whist with your crew">
+<meta name="twitter:description" content="Pull up a chair. Bid it, win the kitty, run a Boston.">
+<meta name="twitter:image" content="https://givemedakitty.com/img/og-card.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="img/icon-192.png">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Libre+Franklin:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=6">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♠</text></svg>">
+<link rel="stylesheet" href="styles.css?v=7">
 </head>
 <body>
 <div class="room" id="app">
   <div class="grain" aria-hidden="true"></div>
 
   <header class="topbar">
-    <h1 class="brand">Bid<span class="brand-amp">&nbsp;</span><em>Whist</em></h1>
-    <p class="tagline">uptown &middot; downtown &middot; no-trump</p>
+    <h1 class="brand"><span class="brand-name"><span class="brand-gm">Give Me </span>Da <em>Kitty</em></span><span class="brand-sub">Bid Whist</span></h1>
+    <p class="tagline">bid it &middot; win the kitty &middot; run a boston</p>
     <div class="mini-score" id="mini-score" aria-label="Score">
       <span><small id="mini-label-us">Us</small> <b id="mini-us">0</b></span><span class="mini-dash">–</span><span><b id="mini-them">0</b> <small id="mini-label-them">Them</small></span>
     </div>
@@ -103,8 +121,9 @@
   <!-- Splash -->
   <div class="overlay show" id="splash">
     <div class="splash-card">
-      <p class="splash-kicker">a rent-party classic</p>
-      <h2 class="splash-title">Bid <em>Whist</em></h2>
+      <p class="splash-kicker">Bid Whist &middot; a rent-party classic</p>
+      <h2 class="splash-title">Give Me Da <em>Kitty</em></h2>
+      <p class="splash-tag">Bid it. Win the kitty. Run a Boston.</p>
       <p class="splash-copy">Four hands, two teams, one kitty. Bid your books, name your trump,
         and run a Boston on &rsquo;em. Play the computer, or deal your friends in online.</p>
       <div class="splash-actions">
@@ -281,16 +300,16 @@
   </div>
 </div>
 
-<script src="js/engine.js?v=6"></script>
-<script src="js/ai.js?v=6"></script>
+<script src="js/engine.js?v=7"></script>
+<script src="js/ai.js?v=7"></script>
 <script>
   // The site and the game server are one Cloudflare Worker, so the server is
   // simply this page's own address — nothing to configure. Only if you host the
   // page somewhere else (e.g. GitHub Pages) would you point it at the Worker:
   // window.BIDWHIST_SERVER = "https://bidwhist.<your-subdomain>.workers.dev";
 </script>
-<script src="js/qrcode.js?v=6"></script>
-<script src="js/net.js?v=6"></script>
-<script src="js/app.js?v=6"></script>
+<script src="js/qrcode.js?v=7"></script>
+<script src="js/net.js?v=7"></script>
+<script src="js/app.js?v=7"></script>
 </body>
 </html>

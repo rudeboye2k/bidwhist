@@ -65,6 +65,12 @@ body {
   text-shadow: 0 2px 12px rgba(0,0,0,.6);
 }
 .brand em { font-style: italic; font-weight: 400; color: var(--cream); }
+.brand-name { display: block; line-height: 1; white-space: nowrap; }
+.brand-sub {
+  display: block; margin-top: 4px;
+  font-family: var(--font-body); font-size: 10px; font-weight: 700; line-height: 1;
+  letter-spacing: .42em; text-transform: uppercase; color: var(--gold-dim); text-shadow: none;
+}
 
 .tagline {
   font-size: 12px; letter-spacing: .28em; text-transform: uppercase;
@@ -413,8 +419,9 @@ body {
 .modal-note { font-size: 12.5px; color: var(--cream-dim); margin-bottom: 16px; font-style: italic; }
 
 .splash-kicker { font-size: 11px; letter-spacing: .4em; text-transform: uppercase; color: var(--gold-dim); margin-bottom: 10px; }
-.splash-title { font-family: var(--font-display); font-size: 58px; font-weight: 800; color: var(--gold-bright); line-height: 1; margin-bottom: 16px; }
+.splash-title { text-wrap: balance; font-family: var(--font-display); font-size: 58px; font-weight: 800; color: var(--gold-bright); line-height: 1; margin-bottom: 16px; }
 .splash-title em { font-style: italic; font-weight: 300; color: var(--cream); }
+.splash-tag { text-wrap: balance; font-family: var(--font-display); font-style: italic; font-size: 18px; color: var(--cream); opacity: .85; margin: -6px 0 14px; }
 .splash-copy { font-size: 14.5px; line-height: 1.65; color: var(--cream-dim); margin-bottom: 26px; }
 
 .stamp {
@@ -621,7 +628,9 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
   .room { padding: 0 max(10px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
 
   .topbar { align-items: center; gap: 10px; padding: max(10px, env(safe-area-inset-top)) 2px 8px; flex-wrap: nowrap; }
-  .brand { font-size: 22px; flex: 1; white-space: nowrap; }
+  .brand { font-size: clamp(17px, 5.6vw, 22px); flex: 1; min-width: 0; white-space: nowrap; }
+  .brand-sub { font-size: 8px; margin-top: 3px; letter-spacing: .36em; }
+  .brand-name { overflow: hidden; text-overflow: ellipsis; padding-right: 2px; }
   .tagline { display: none; }
   .menu-toggle { display: inline-flex; align-items: center; padding: 7px 13px; font-size: 17px; line-height: 1; letter-spacing: 0; }
   .topnav {
@@ -700,6 +709,7 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
   .modal, .splash-card { padding: 24px 18px; border-radius: 20px; }
   .modal-title { font-size: 22px; }
   .splash-title { font-size: 46px; }
+  .splash-kicker { letter-spacing: .22em; }
   .splash-copy { font-size: 14px; }
   .online-split { flex-direction: column; }
   .online-or { padding: 0; }
@@ -717,6 +727,8 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
   .room { padding: 0 max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
   .topbar { align-items: center; gap: 10px; padding: 6px 2px 4px; flex-wrap: nowrap; }
   .brand { font-size: 20px; flex: 1; white-space: nowrap; }
+  .brand-sub { display: none; }
+  .splash-tag { font-size: 15px; margin: -2px 0 8px; }
   .tagline { display: none; }
   .mini-score { display: inline-flex; }
   .menu-toggle { display: inline-flex; align-items: center; padding: 6px 12px; font-size: 16px; line-height: 1; }
@@ -840,3 +852,6 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
 .team-card .roster li.assignable { padding-right: 6px; }
 .seat-act:hover { border-color: var(--gold-bright); }
 #modal-gameover #btn-to-lobby { margin-top: 10px; }
+
+/* narrowest phones: the header goes by its short name, "Da Kitty" */
+@media (max-width: 380px) { .brand-gm { display: none; } .brand { font-size: 22px; } }
