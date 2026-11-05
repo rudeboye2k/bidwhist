@@ -1,0 +1,13 @@
+# Keep everything but the playable site out of the public static assets.
+.git
+.github
+.wrangler
+node_modules
+server
+tests
+wrangler.toml
+package.json
+package-lock.json
+*.md
+.gitignore
+.assetsignore

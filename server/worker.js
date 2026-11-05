@@ -1,20 +1,29 @@
 /*
- * Cloudflare Worker + Durable Object for Bid Whist online play.
+ * Cloudflare Worker + Durable Object for Bid Whist — serves the game AND runs
+ * online play from one Worker, so the site and server share a URL.
  *
- *   Worker (fetch)         — routes HTTP + WebSocket upgrades.
- *   GameRoom (Durable Obj) — ONE per join code (env.GAME_ROOM.idFromName(code)),
- *                            so every game is a separate object with its own
- *                            state and sockets. Rooms cannot collide.
+ *   Static files (index.html, js/, styles.css) are served by Workers Static
+ *   Assets before this script runs. This script only sees /api/* requests:
+ *     POST /api/new            → mint a fresh game key
+ *     GET  /api/health         → liveness check
+ *     WS   /api/room/:code/ws  → join that room's Durable Object
  *
- * The heavy lifting lives in room-core.js (unit-tested in Node). This file is
- * just transport: sockets in, validated intents to the Room, snapshots + event
- * streams back out. WebSocket Hibernation keeps idle rooms cheap.
+ *   GameRoom — ONE Durable Object per game key (idFromName(code)), so every
+ *   game is a separate object with its own state and sockets. Rooms can't
+ *   collide.
+ *
+ * Hibernation-safe: Cloudflare may evict an idle room from memory between
+ * moves while sockets stay open. So the room is saved to Durable Object
+ * storage after every change and restored on wake, and each socket's player
+ * token rides on the socket itself (serializeAttachment) rather than in memory.
  */
 
 // room-core.js pulls in engine.js + ai.js through its own require()s. wrangler
 // bundles with esbuild, which treats these UMD files as CommonJS, so a plain
-// default import gives us their module.exports — no globals, no build hacks.
+// default import gives us their module.exports.
 import RoomCore from './room-core.js';
+
+const { Room } = RoomCore;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -29,7 +38,7 @@ function json(obj, status = 200) {
 }
 
 function makeCode() {
-  // Ambiguity-free alphabet (no O/0/I/1) for codes people read aloud.
+  // Ambiguity-free alphabet (no O/0/I/1) for keys people read aloud.
   const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let s = '';
   for (let i = 0; i < 5; i++) s += abc[Math.floor(Math.random() * abc.length)];
@@ -41,21 +50,18 @@ export default {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
 
-    // Mint a fresh code and hand it back (host flow). The room is created lazily
-    // on first WebSocket connect, so an unused code costs nothing.
-    if (url.pathname === '/api/new' && request.method === 'POST') {
-      return json({ code: makeCode() });
-    }
+    if (url.pathname === '/api/new' && request.method === 'POST') return json({ code: makeCode() });
+    if (url.pathname === '/api/health') return json({ ok: true, service: 'bidwhist' });
 
-    // WebSocket join: /api/room/:code/ws
     const m = url.pathname.match(/^\/api\/room\/([A-Za-z0-9]{3,8})\/ws$/);
     if (m) {
       const code = m[1].toUpperCase();
-      const id = env.GAME_ROOM.idFromName(code);
-      const stub = env.GAME_ROOM.get(id);
+      const stub = env.GAME_ROOM.get(env.GAME_ROOM.idFromName(code));
       return stub.fetch(request);
     }
 
+    // Anything else that isn't a static file.
+    if (env.ASSETS && !url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     return json({ error: 'not-found' }, 404);
   },
 };
@@ -64,40 +70,46 @@ export class GameRoom {
   constructor(state, env) {
     this.state = state;
     this.env = env;
-    this.room = null;         // RoomCore.Room, created on first connect
-    this.sockets = new Map(); // ws -> { token }
-    this.code = null;
+    this.room = null;
+    // Restore the saved game before handling any request or socket message.
+    this.state.blockConcurrencyWhile(async () => {
+      const saved = await this.state.storage.get('room');
+      if (saved) this.room = Room.fromJSON(saved);
+    });
   }
 
   _ensureRoom(code) {
-    if (!this.room) {
-      this.code = code;
-      this.room = new RoomCore.Room(code, {});
-    }
+    if (!this.room) this.room = new Room(code, {});
     return this.room;
+  }
+
+  async _save() {
+    if (this.room) await this.state.storage.put('room', this.room.toJSON());
   }
 
   async fetch(request) {
     const url = new URL(request.url);
-    const code = (url.pathname.match(/room\/([A-Za-z0-9]+)\//) || [])[1] || 'ROOM';
-    this._ensureRoom(code.toUpperCase());
+    const code = ((url.pathname.match(/room\/([A-Za-z0-9]+)\//) || [])[1] || 'ROOM').toUpperCase();
+    this._ensureRoom(code);
 
     if (request.headers.get('Upgrade') !== 'websocket')
       return new Response('expected websocket', { status: 426 });
 
     const pair = new WebSocketPair();
-    const [client, server] = [pair[0], pair[1]];
-    this.state.acceptWebSocket(server); // hibernatable
-    this.sockets.set(server, { token: null });
+    const client = pair[0], server = pair[1];
+    this.state.acceptWebSocket(server);   // hibernatable socket
+    server.serializeAttachment({ token: null });
     return new Response(null, { status: 101, webSocket: client });
   }
 
   // ---- socket lifecycle (hibernation handlers) ----
 
   async webSocketMessage(ws, raw) {
+    if (!this.room) this._ensureRoom('ROOM'); // defensive: should be restored already
     let msg;
-    try { msg = JSON.parse(raw); } catch (_) { return this._send(ws, { type: 'error', error: 'bad-json' }); }
-    const meta = this.sockets.get(ws) || {};
+    try { msg = JSON.parse(typeof raw === 'string' ? raw : new TextDecoder().decode(raw)); }
+    catch (_) { return this._send(ws, { type: 'error', error: 'bad-json' }); }
+    const meta = ws.deserializeAttachment() || {};
 
     if (msg.type === 'hello') {
       // Reclaim a seat if the socket carries a token this room still knows;
@@ -110,8 +122,8 @@ export class GameRoom {
         r = this.room.join(msg.name, msg.avatar); token = r.token;
       }
       if (r.error) return this._send(ws, { type: 'error', error: r.error });
-      meta.token = token;
-      this.sockets.set(ws, meta);
+      ws.serializeAttachment({ token });
+      await this._save();
       this._send(ws, { type: 'welcome', token, seat: r.seat, host: !!r.host });
       return this._broadcast();
     }
@@ -127,18 +139,29 @@ export class GameRoom {
     else return this._send(ws, { type: 'error', error: 'unknown-type' });
 
     if (out && out.error) return this._send(ws, { type: 'error', error: out.error });
+    await this._save();
     this._broadcast(out && out.events);
   }
 
-  async webSocketClose(ws) {
-    const meta = this.sockets.get(ws);
-    if (meta && meta.token) this.room.setConnected(meta.token, false);
-    this.sockets.delete(ws);
-    this._broadcast();
+  async webSocketClose(ws, code) {
+    await this._dropSocket(ws);
+    try { ws.close(code === 1005 || code === 1006 ? 1000 : code, 'bye'); } catch (_) { /* already closed */ }
   }
 
   async webSocketError(ws) {
-    this.sockets.delete(ws);
+    await this._dropSocket(ws);
+  }
+
+  async _dropSocket(ws) {
+    const meta = ws.deserializeAttachment() || {};
+    if (!meta.token || !this.room) return;
+    // Only mark the player away if no other open socket still holds their seat
+    // (e.g. they reconnected in a new tab before the old one closed).
+    const others = this.state.getWebSockets().filter((s) => s !== ws);
+    const stillHere = others.some((s) => (s.deserializeAttachment() || {}).token === meta.token);
+    if (!stillHere) this.room.setConnected(meta.token, false);
+    await this._save();
+    this._broadcast(null, ws);
   }
 
   // ---- fan-out ----
@@ -149,10 +172,11 @@ export class GameRoom {
 
   // Push each connected socket its own tailored snapshot (its own hand only),
   // plus the shared event stream for animation.
-  _broadcast(events) {
-    for (const [ws, meta] of this.sockets) {
-      const view = this.room.viewFor(meta.token);
-      this._send(ws, { type: 'state', view, events: events || [] });
+  _broadcast(events, except) {
+    for (const ws of this.state.getWebSockets()) {
+      if (ws === except) continue;
+      const meta = ws.deserializeAttachment() || {};
+      this._send(ws, { type: 'state', view: this.room.viewFor(meta.token), events: events || [] });
     }
   }
 }

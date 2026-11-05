@@ -21,24 +21,38 @@ is covered by `../tests/room.test.js`. The Worker is just transport.
 
 ## Deploy
 
-Runs on the **Workers Free plan** — the Durable Object here uses the SQLite
-storage backend (`new_sqlite_classes`), which is free-tier eligible, so no paid
-plan is required.
+There's one Worker for the whole game — `wrangler.toml` lives at the **repo
+root**, and it serves the static site *and* routes `/api/*` here. Cloudflare's
+GitHub integration (Workers Builds) deploys it automatically on every push to
+`main`; nothing to run by hand. It fits the **Workers Free plan**: the Durable
+Object uses the SQLite storage backend (`new_sqlite_classes`), which is
+free-tier eligible.
+
+Manual deploy, if you ever need it (from the repo root):
 
 ```sh
-cd server
-npx wrangler login          # once (opens a browser)
-npx wrangler deploy         # bundles worker.js (esbuild) + creates the DO
+npx wrangler login
+npx wrangler deploy
 ```
 
-Deploy prints your Worker URL, e.g. `https://bidwhist-server.<subdomain>.workers.dev`.
+Because the site and the server share an origin, the client simply uses the
+page's own address — there's no server URL to configure. (Only if you host the
+page elsewhere, e.g. GitHub Pages, set `window.BIDWHIST_SERVER` in `index.html`
+to the Worker's URL.)
 
-## Point the game at it
+Routes: `POST /api/new` (mint a game key), `GET /api/health` (liveness),
+`WS /api/room/:code/ws` (join that room). Everything else is a static file;
+`.assetsignore` keeps `server/`, `tests/` and docs out of the public assets.
 
-In the deployed game, open **Play Online** and paste that Worker URL (it's saved
-in your browser). Or hard-wire it by setting `window.BIDWHIST_SERVER` before
-`js/net.js` loads. With no server configured, the game still runs fully in local
-(vs-computer) mode.
+## Durability
+
+Cloudflare can evict an idle room from memory between moves (WebSocket
+hibernation, deploys) while players' sockets stay open. So `GameRoom` saves the
+whole room to Durable Object storage after every change and restores it on wake
+(`Room.toJSON` / `Room.fromJSON`), and each socket's player token is stored on
+the socket itself (`serializeAttachment`). Verified by killing the server
+mid-trick and reconnecting: both players reclaim their seats and play resumes
+exactly where it left off.
 
 ## Protocol (WebSocket, JSON)
 
@@ -72,8 +86,8 @@ can't make an illegal bid or play.
 ## Local dev
 
 ```sh
-cd server
-npx wrangler dev            # runs the Worker + DO locally with Miniflare
+npx wrangler dev            # from the repo root: site + Worker + DO, locally
 ```
 
-Then point the game at the printed `http://localhost:8787`.
+Open the printed `http://localhost:8787` — that's the game, already wired to
+the local server.

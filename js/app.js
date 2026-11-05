@@ -787,8 +787,10 @@
   function inviteLink(code) {
     const base = location.origin + location.pathname;
     let link = base + '#join=' + encodeURIComponent(code);
+    // Only carry the server when it isn't simply this site (keeps the link and
+    // QR short in the normal one-Worker setup).
     const srv = Online.base || Net.serverBase();
-    if (srv) link += '&s=' + encodeURIComponent(srv);
+    if (srv && srv !== location.origin) link += '&s=' + encodeURIComponent(srv);
     return link;
   }
   function copyText(text, btn, label) {
@@ -818,6 +820,7 @@
   function openOnlineSetup() {
     $('online-error').textContent = '';
     $('online-server').value = Net.serverBase();
+    $('online-advanced').open = !Net.serverBase(); // only shown when there's no default
     renderOnlineProfile();
     $('modal-online').classList.add('show');
   }
@@ -840,7 +843,7 @@
       const code = await Net.newCode(base);
       connectRoom(base, code, true);
     } catch (e) {
-      setOnlineError('Could not reach the server. Check the URL. (' + (e.message || e) + ')');
+      showServerProblem('Could not reach the game server. (' + (e.message || e) + ')');
     }
   }
 
@@ -854,11 +857,13 @@
 
   function readServer() {
     const base = ($('online-server').value || '').trim().replace(/\/$/, '');
-    if (!/^https?:\/\//.test(base)) { setOnlineError('Enter your server URL (https://…workers.dev).'); return ''; }
+    if (!/^https?:\/\//.test(base)) { showServerProblem('Enter your server URL (https://…workers.dev).'); return ''; }
     Net.saveServer(base);
     return base;
   }
   function setOnlineError(msg) { $('online-error').textContent = msg || ''; }
+  // Connection trouble: say so and reveal the (normally hidden) server field.
+  function showServerProblem(msg) { setOnlineError(msg); $('online-advanced').open = true; }
 
   function connectRoom(base, code, isHost) {
     Object.assign(Online, { base, code, isHost, queue: [], draining: false, started: false });
@@ -875,7 +880,7 @@
       },
       onMessage: onServerMessage,
       onClose() { if (Online.started) $('modal-disconnect').classList.add('show'); },
-      onError() { setOnlineError('Connection error. Check the server URL.'); },
+      onError() { showServerProblem('Connection error — could not open the table.'); },
     });
   }
 

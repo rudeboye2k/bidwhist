@@ -1,0 +1,28 @@
+# Bid Whist — ONE Cloudflare Worker serves the game site AND runs online play.
+#
+# Cloudflare auto-deploys this on every push to `main` (Workers Builds is
+# connected to the GitHub repo), so there is nothing to run by hand. Manual
+# deploy, if ever needed:  npx wrangler login && npx wrangler deploy
+#
+# Runs on the Workers FREE plan: SQLite-backed Durable Objects are free-tier
+# eligible. `name` must match the Worker connected in the Cloudflare dashboard.
+
+name = "bidwhist"
+main = "server/worker.js"
+compatibility_date = "2025-10-01"
+
+# The static game (index.html, styles.css, js/, _headers) is served straight
+# from the repo root; .assetsignore keeps server code, tests and docs out.
+# Requests that don't match a file (i.e. /api/*) fall through to the Worker.
+[assets]
+directory = "."
+binding = "ASSETS"
+
+# One Durable Object class = one authoritative game room per game key.
+[[durable_objects.bindings]]
+name = "GAME_ROOM"
+class_name = "GameRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameRoom"]

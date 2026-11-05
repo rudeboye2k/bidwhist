@@ -3,20 +3,38 @@
 (function () {
   'use strict';
 
-  const SERVER_KEY = 'bidwhist.server';
+  // v2 key: the old 'bidwhist.server' could hold a URL that never existed, so
+  // it's discarded rather than trusted.
+  const SERVER_KEY = 'bidwhist.serverUrl';
+  try { localStorage.removeItem('bidwhist.server'); } catch (_) { /* ignore */ }
 
-  // Resolve the backend base URL: a previously saved value wins (the host may
-  // have typed their own), then the baked-in default, else empty.
-  function serverBase() {
-    try {
-      const s = (localStorage.getItem(SERVER_KEY) || '').trim();
-      if (s) return s.replace(/\/$/, '');
-    } catch (_) { /* ignore */ }
-    if (window.BIDWHIST_SERVER) return String(window.BIDWHIST_SERVER).replace(/\/$/, '');
+  const clean = (u) => String(u || '').trim().replace(/\/$/, '');
+
+  // The game and the server are one Worker, so the page's own origin IS the
+  // server. An explicit window.BIDWHIST_SERVER overrides that (e.g. if the
+  // site is hosted somewhere else, like GitHub Pages).
+  function defaultServer() {
+    if (window.BIDWHIST_SERVER) return clean(window.BIDWHIST_SERVER);
+    if (/^https?:$/.test(location.protocol)) return location.origin;
     return '';
   }
+
+  // A custom URL the player typed wins; otherwise the default.
+  function serverBase() {
+    try {
+      const s = clean(localStorage.getItem(SERVER_KEY));
+      if (s) return s;
+    } catch (_) { /* ignore */ }
+    return defaultServer();
+  }
+  // Only remember a URL that differs from the default, so the default can
+  // change later without a stale value pinning old browsers to it.
   function saveServer(url) {
-    try { localStorage.setItem(SERVER_KEY, String(url || '').replace(/\/$/, '')); } catch (_) { /* ignore */ }
+    const u = clean(url);
+    try {
+      if (!u || u === defaultServer()) localStorage.removeItem(SERVER_KEY);
+      else localStorage.setItem(SERVER_KEY, u);
+    } catch (_) { /* ignore */ }
   }
 
   function wsUrl(base, code) {
@@ -50,5 +68,5 @@
     };
   }
 
-  window.Net = { serverBase, saveServer, newCode, connect };
+  window.Net = { serverBase, defaultServer, saveServer, newCode, connect };
 })();

@@ -119,5 +119,27 @@ r1.start(r1.hostToken);
 check('room 2 unaffected by room 1 start', r2.phase === 'lobby');
 check('rooms have distinct codes', r1.code !== r2.code);
 
+// ---- persistence: a room survives save/restore mid-game ----
+// Durable Objects can be evicted between moves; the room is saved after every
+// change and restored on wake. structuredClone mimics DO storage.
+{
+  let r = new Room('SAVE1', { gameTarget: 4 }, { rng: seeded(11) });
+  const p1 = r.join('Ann');
+  const p2 = r.join('Ben');
+  r.start(p1.token);
+  // play a few moves, then "evict" and restore several times along the way
+  let moves = 0, restores = 0, g = 0;
+  while (r.phase !== 'gameover' && g++ < 100000) {
+    if (moves % 7 === 3) { r = Room.fromJSON(structuredClone(r.toJSON())); restores++; }
+    if (r.phase === 'handover') { r.nextHand(p1.token); moves++; continue; }
+    const tok = r.turn === 0 ? p1.token : r.turn === 1 ? p2.token : null;
+    if (!tok || !autoAct(r, tok)) break;
+    moves++;
+  }
+  check('restored room still recognizes player tokens', r.seatOf(p1.token) === 0 && r.seatOf(p2.token) === 1);
+  check('game played to completion across many save/restores', r.phase === 'gameover' && restores > 5);
+  check('played-card memory restored as a Set', r.memory instanceof Set);
+}
+
 if (failures) { console.error('\n' + failures + ' failure(s)'); process.exit(1); }
 console.log('\nAll room-core tests passed.');

@@ -11,34 +11,34 @@ online play is powered by a small Cloudflare Worker.
   hosted site, and hit **Play the Computer**. No install, no server.
 - **Online with friends:** hit **Play Online** → **Host a Table**, share the game
   key, and your friends **Join** with it. Any empty seats are filled by the
-  computer. This needs the backend deployed once — see [`server/`](server/).
+  computer. Works on the hosted site out of the box — nothing to configure.
 - **Your player:** set a **name and avatar** (upload a photo, or spin a random
   cartoon) from the **Profile** chip on the splash or the Profile button. It
   shows on your seat in both solo and online play; online, everyone at the table
   sees each other's.
-- **Hosting the static site:** it's just files, so any static host works —
-  GitHub Pages (Settings → Pages → deploy from `main`) or Cloudflare Pages
-  (build command: none, output dir `/`). See `_headers` for the Cloudflare
-  caching/security headers.
+- **Hosting:** one Cloudflare Worker (`wrangler.toml` at the repo root) serves
+  both the game and the online server. Cloudflare's GitHub integration
+  auto-deploys it on every push to `main`, so there's nothing to run by hand.
+  It fits the Workers **Free** plan. See `_headers` for caching/security headers.
 
 ## Playing with others online
 
 One player **hosts** and gets a 5-character game key (e.g. `HURLQ`). To invite
 others, the lobby shows a **QR code** and a **Copy invite link** button — the
-link (and QR) carry both the key and the host's server, so a friend just taps it
-(or scans) and lands on the Join screen pre-filled, ready to go. They can also
+link (and QR) carry the key, so a friend just taps it (or scans) and lands on
+the Join screen pre-filled, ready to go. They can also
 **Join** and type the key by hand. Seats nobody takes are played by the adaptive
 AI, so a table of one human + three bots and a table of four humans use the exact
 same game. You can run **any number of tables at once** — each game key is a
 completely separate room, so games never bleed into each other. If you drop,
 your browser remembers your seat and can reconnect to the same table.
 
-The backend is a Cloudflare Worker + Durable Objects (one isolated object per
-game key). Deploy instructions and the full protocol are in
-[`server/README.md`](server/README.md). After deploying, set your Worker URL once
-as `window.BIDWHIST_SERVER` in `index.html` so the Server URL field auto-fills
-for everyone; players can still override it. With no backend configured the game
-still runs fully in solo mode.
+The server is a Durable Object (one isolated object per game key) living in
+the same Worker that serves the site, so the page's own address *is* the server
+— players never see or type a server URL. Game state is saved after every move,
+so a table survives Cloudflare putting an idle room to sleep. Details and the
+protocol are in [`server/README.md`](server/README.md). Opened as a local file
+(no server), the game still runs fully in solo mode.
 
 ## The computer learns as you play
 
@@ -106,8 +106,9 @@ js/net.js           WebSocket transport for online play
 js/qrcode.js        self-contained QR generator for invite links
 js/app.js           game flow, DOM rendering, and the online controller
 server/room-core.js authoritative game state machine (shared by the backend)
-server/worker.js    Cloudflare Worker + Durable Object (WebSocket transport)
-server/wrangler.toml deploy config
+server/worker.js    Worker entry (/api/*) + GameRoom Durable Object
+wrangler.toml       the one Worker: static site + server + Durable Object
+.assetsignore       keeps server code, tests and docs out of public assets
 tests/              engine tests, AI-vs-AI simulator, room-core tests
 ```
 

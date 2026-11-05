@@ -533,3 +533,15 @@ body {
   .hand { padding: 0 8px; }
   .opp-hand.vertical .card { margin: -34px 0; }
 }
+
+/* Server URL tucked away — it's this site, so players never need it. */
+.online-advanced { text-align: left; margin: 0 0 12px; }
+.online-advanced summary {
+  cursor: pointer; font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--gold-dim); list-style: none; padding: 4px 0;
+}
+.online-advanced summary::-webkit-details-marker { display: none; }
+.online-advanced summary::before { content: "▸ "; }
+.online-advanced[open] summary::before { content: "▾ "; }
+.online-advanced .online-field { margin: 8px 0 4px; }
+.online-advanced .online-sub { text-align: left; margin-top: 6px; }

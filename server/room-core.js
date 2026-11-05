@@ -421,6 +421,26 @@
       return { code: this.code, phase: this.phase, handNo: this.handNo,
         players: this.seats.map((s) => ({ seat: s.seat, kind: s.kind, name: s.name })) };
     }
+
+    // ---- persistence ------------------------------------------------------
+    // The Durable Object can be evicted from memory between moves (hibernation,
+    // deploys), so the whole room is saved after every change and restored on
+    // wake. Plain data only: the RNG is dropped and the played-card Set becomes
+    // an array.
+    toJSON() {
+      const o = {};
+      for (const k of Object.keys(this)) if (k !== 'rng') o[k] = this[k];
+      o.memory = Array.from(this.memory || []);
+      return o;
+    }
+
+    static fromJSON(data) {
+      const r = new Room(data.code, data.rules);
+      Object.assign(r, data);
+      r.memory = new Set(data.memory || []);
+      r.rng = Math.random;
+      return r;
+    }
   }
 
   return { Room };

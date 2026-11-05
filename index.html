@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Libre+Franklin:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=3">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♠</text></svg>">
 </head>
 <body>
@@ -119,10 +119,14 @@
         <span class="profile-summary-name" id="online-pname">You</span>
         <button class="btn ghost small" id="btn-edit-profile" type="button">Edit name &amp; avatar</button>
       </div>
-      <div class="online-field">
-        <label for="online-server">Server URL</label>
-        <input type="text" id="online-server" placeholder="https://bidwhist-server.…workers.dev" autocomplete="off">
-      </div>
+      <details class="online-advanced" id="online-advanced">
+        <summary>Server settings</summary>
+        <div class="online-field">
+          <label for="online-server">Server URL</label>
+          <input type="text" id="online-server" placeholder="https://bidwhist.…workers.dev" autocomplete="off">
+          <p class="online-sub">Leave as-is — it's this site. Only change it if your game server lives elsewhere.</p>
+        </div>
+      </details>
       <div class="online-split">
         <div class="online-col">
           <button class="btn primary" id="btn-host" type="button">Host a Table</button>
@@ -263,16 +267,16 @@
   </div>
 </div>
 
-<script src="js/engine.js"></script>
-<script src="js/ai.js"></script>
+<script src="js/engine.js?v=3"></script>
+<script src="js/ai.js?v=3"></script>
 <script>
-  // Default backend so the Server URL field pre-fills and friends never have to
-  // type it. Change this one line if your Worker URL differs. (Each invite link
-  // also carries the host's actual server, so sharing works regardless.)
-  window.BIDWHIST_SERVER = "https://bidwhist-server.edward-weir.workers.dev";
+  // The site and the game server are one Cloudflare Worker, so the server is
+  // simply this page's own address — nothing to configure. Only if you host the
+  // page somewhere else (e.g. GitHub Pages) would you point it at the Worker:
+  // window.BIDWHIST_SERVER = "https://bidwhist.<your-subdomain>.workers.dev";
 </script>
-<script src="js/qrcode.js"></script>
-<script src="js/net.js"></script>
-<script src="js/app.js"></script>
+<script src="js/qrcode.js?v=3"></script>
+<script src="js/net.js?v=3"></script>
+<script src="js/app.js?v=3"></script>
 </body>
 </html>
