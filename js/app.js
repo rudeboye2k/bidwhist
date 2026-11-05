@@ -781,6 +781,40 @@
 
   function tokenKey(code) { return 'bidwhist.token.' + code; }
 
+  // A shareable deep link that carries the game key AND the host's actual server,
+  // so a friend who opens it lands pre-filled and ready to join — regardless of
+  // what default server their own app has.
+  function inviteLink(code) {
+    const base = location.origin + location.pathname;
+    let link = base + '#join=' + encodeURIComponent(code);
+    const srv = Online.base || Net.serverBase();
+    if (srv) link += '&s=' + encodeURIComponent(srv);
+    return link;
+  }
+  function copyText(text, btn, label) {
+    const done = () => { if (btn) { btn.textContent = 'Copied!'; setTimeout(() => (btn.textContent = label), 1400); } };
+    const fail = () => { try { window.prompt('Copy this:', text); } catch (_) { /* ignore */ } };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fail);
+    else fail();
+  }
+
+  // A friend opened an invite link (#join=CODE&s=SERVER): save the server, open
+  // the online panel with the key pre-filled, ready for one tap on Join.
+  function handleDeepLink() {
+    const h = location.hash || '';
+    const m = h.match(/join=([A-Za-z0-9]{3,8})/i);
+    if (!m) return false;
+    const code = m[1].toUpperCase();
+    const sm = h.match(/[&#?]s=([^&]+)/);
+    if (sm) { try { Net.saveServer(decodeURIComponent(sm[1])); } catch (_) { /* ignore */ } }
+    $('splash').classList.remove('show');
+    openOnlineSetup();
+    $('join-code').value = code;
+    const note = document.querySelector('#modal-online .modal-note');
+    if (note) note.textContent = `You've been invited to table ${code} — just tap “Join a Table”.`;
+    return true;
+  }
+
   function openOnlineSetup() {
     $('online-error').textContent = '';
     $('online-server').value = Net.serverBase();
@@ -1031,6 +1065,8 @@
 
   function showLobby(view) {
     $('lobby-code').textContent = Online.code;
+    const link = inviteLink(Online.code);
+    if (window.QRCode) QRCode.render($('lobby-qr'), link);
     const roster = $('lobby-roster'); roster.innerHTML = '';
     const seatLetter = ['S', 'W', 'N', 'E'];
     view.seats.forEach((s) => {
@@ -1182,10 +1218,8 @@
     try { Online.conn && Online.conn.send({ type: 'leave' }); Online.conn && Online.conn.close(); } catch (_) { /* ignore */ }
     location.reload();
   });
-  $('btn-copy-key').addEventListener('click', () => {
-    const done = () => { const b = $('btn-copy-key'); b.textContent = 'Copied!'; setTimeout(() => (b.textContent = 'Copy game key'), 1400); };
-    if (navigator.clipboard) navigator.clipboard.writeText(Online.code).then(done, done); else done();
-  });
+  $('btn-copy-link').addEventListener('click', () => copyText(inviteLink(Online.code), $('btn-copy-link'), 'Copy invite link'));
+  $('btn-copy-key').addEventListener('click', () => copyText(Online.code, $('btn-copy-key'), 'Copy key only'));
   $('btn-reconnect').addEventListener('click', () => {
     $('modal-disconnect').classList.remove('show');
     connectRoom(Online.base, Online.code, Online.isHost);
@@ -1216,4 +1250,5 @@
   renderPlates(); // show the profile + AI avatars before the first deal
   renderSplashProfile();
   actionHint('Waiting on the deal…');
+  handleDeepLink(); // if opened from an invite link, jump to the join panel
 })();

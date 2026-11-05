@@ -23,16 +23,21 @@ online play is powered by a small Cloudflare Worker.
 
 ## Playing with others online
 
-One player **hosts** and gets a 5-character game key (e.g. `HURLQ`). Everyone
-else picks **Join** and enters that key. Seats nobody takes are played by the
-adaptive AI, so a table of one human + three bots and a table of four humans use
-the exact same game. You can run **any number of tables at once** — each game
-key is a completely separate room, so games never bleed into each other. If you
-drop, your browser remembers your seat and can reconnect to the same table.
+One player **hosts** and gets a 5-character game key (e.g. `HURLQ`). To invite
+others, the lobby shows a **QR code** and a **Copy invite link** button — the
+link (and QR) carry both the key and the host's server, so a friend just taps it
+(or scans) and lands on the Join screen pre-filled, ready to go. They can also
+**Join** and type the key by hand. Seats nobody takes are played by the adaptive
+AI, so a table of one human + three bots and a table of four humans use the exact
+same game. You can run **any number of tables at once** — each game key is a
+completely separate room, so games never bleed into each other. If you drop,
+your browser remembers your seat and can reconnect to the same table.
 
 The backend is a Cloudflare Worker + Durable Objects (one isolated object per
 game key). Deploy instructions and the full protocol are in
-[`server/README.md`](server/README.md). With no backend configured the game
+[`server/README.md`](server/README.md). After deploying, set your Worker URL once
+as `window.BIDWHIST_SERVER` in `index.html` so the Server URL field auto-fills
+for everyone; players can still override it. With no backend configured the game
 still runs fully in solo mode.
 
 ## The computer learns as you play
@@ -98,6 +103,7 @@ styles.css          the whole look — felt, mahogany, gold, cream card stock
 js/engine.js        pure rules engine (deck, bids, ranking, tricks, scoring)
 js/ai.js            heuristic AI + session learner
 js/net.js           WebSocket transport for online play
+js/qrcode.js        self-contained QR generator for invite links
 js/app.js           game flow, DOM rendering, and the online controller
 server/room-core.js authoritative game state machine (shared by the backend)
 server/worker.js    Cloudflare Worker + Durable Object (WebSocket transport)
@@ -113,6 +119,7 @@ what the tests exercise:
 node tests/engine.test.js    # rules invariants
 node tests/simulate.js 400   # paired AI sim: learner is harmless + responsive
 node tests/room.test.js      # authoritative room: turns, card hiding, isolation
+node tests/qrcode.test.js    # QR encoder: RS syndromes + structure
 ```
 
 Key engine formulas: a contract needs `6 + bid` books; defenders set it at

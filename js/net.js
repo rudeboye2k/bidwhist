@@ -5,10 +5,15 @@
 
   const SERVER_KEY = 'bidwhist.server';
 
-  // Resolve the backend base URL: explicit global override, else saved value.
+  // Resolve the backend base URL: a previously saved value wins (the host may
+  // have typed their own), then the baked-in default, else empty.
   function serverBase() {
+    try {
+      const s = (localStorage.getItem(SERVER_KEY) || '').trim();
+      if (s) return s.replace(/\/$/, '');
+    } catch (_) { /* ignore */ }
     if (window.BIDWHIST_SERVER) return String(window.BIDWHIST_SERVER).replace(/\/$/, '');
-    try { return (localStorage.getItem(SERVER_KEY) || '').replace(/\/$/, ''); } catch (_) { return ''; }
+    return '';
   }
   function saveServer(url) {
     try { localStorage.setItem(SERVER_KEY, String(url || '').replace(/\/$/, '')); } catch (_) { /* ignore */ }

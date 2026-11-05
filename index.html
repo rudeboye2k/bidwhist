@@ -168,8 +168,14 @@
   <div class="overlay" id="modal-lobby">
     <div class="modal">
       <h2 class="modal-title">Table <span id="lobby-code" class="code-badge"></span></h2>
-      <p class="modal-note" id="lobby-note">Share the game key. Empty seats fill with the computer when you start.</p>
-      <button class="btn ghost copy-key" id="btn-copy-key" type="button">Copy game key</button>
+      <p class="modal-note" id="lobby-note">Share the invite — friends tap it to drop straight into this table. Empty seats fill with the computer when you start.</p>
+      <div class="share-box">
+        <div class="qr" id="lobby-qr" title="Scan to join"></div>
+        <div class="share-actions">
+          <button class="btn primary" id="btn-copy-link" type="button">Copy invite link</button>
+          <button class="btn ghost" id="btn-copy-key" type="button">Copy key only</button>
+        </div>
+      </div>
       <ul class="roster" id="lobby-roster"></ul>
       <button class="btn primary big" id="btn-start-online" type="button">Start Game</button>
       <p class="online-sub" id="lobby-wait">Waiting for the host to start&hellip;</p>
@@ -259,6 +265,13 @@
 
 <script src="js/engine.js"></script>
 <script src="js/ai.js"></script>
+<script>
+  // Default backend so the Server URL field pre-fills and friends never have to
+  // type it. Change this one line if your Worker URL differs. (Each invite link
+  // also carries the host's actual server, so sharing works regardless.)
+  window.BIDWHIST_SERVER = "https://bidwhist-server.edward-weir.workers.dev";
+</script>
+<script src="js/qrcode.js"></script>
 <script src="js/net.js"></script>
 <script src="js/app.js"></script>
 </body>
