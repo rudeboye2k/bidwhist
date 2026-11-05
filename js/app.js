@@ -15,7 +15,13 @@
   // 1 west, 2 north (partner), 3 east.
   function slot(seat) { return (seat - G.viewSeat + 4) % 4; }
   function myTeam() { return G.viewSeat % 2; }
-  function teamLabel(team) { return team === myTeam() ? 'Us' : 'Them'; }
+  // Online, teams carry the names their captains chose; solo it's Us / Them.
+  function teamLabel(team) {
+    if (G.mode === 'online' && G.view && G.view.teams && G.view.teams[team]) return G.view.teams[team].name;
+    return team === myTeam() ? 'Us' : 'Them';
+  }
+  // Start / deal-next powers come from the server (they pass on if the host leaves).
+  function amHost() { return G.view ? !!G.view.hostToken : !!(typeof Online !== 'undefined' && Online.isHost); }
   function seatName(seat) {
     if (G.mode === 'online' && G.view && G.view.seats) {
       if (seat === G.viewSeat) return 'You';
@@ -235,6 +241,10 @@
     $('books-them').textContent = G.books[them];
     $('mini-us').textContent = G.scores[us];     // compact header score (phones)
     $('mini-them').textContent = G.scores[them];
+    for (const [id, t] of [['label-us', us], ['label-them', them], ['books-label-us', us],
+      ['books-label-them', them], ['mini-label-us', us], ['mini-label-them', them]]) {
+      const el = $(id); if (el) { el.textContent = teamLabel(t); el.title = teamLabel(t); }
+    }
   }
 
   function renderContractLine() {
@@ -312,8 +322,8 @@
           : seat === (G.viewSeat + 2) % 4 ? 'your partner' : SLOT_ROLE[slot(seat)];
         if (G.mode === 'online' && G.view && G.view.seats) {
           const s = G.view.seats[seat];
-          if (s && s.kind === 'ai') role += ' · bot';
-          else if (s && s.kind === 'human' && !s.connected) role += ' · away';
+          if (s && s.kind === 'ai') role += s.left ? ' · left · bot' : ' · bot';
+          else if (s && s.kind === 'human' && !s.connected) role += ' · away · bot playing';
         }
         roleEl.textContent = role;
       }
@@ -1042,6 +1052,9 @@
           showOnlineSummary(ev.result);
           await wait(300);
           break;
+        case 'botTakeover':
+          log(`<b>${ev.name || 'A player'}</b> left the table — a bot takes the seat.`, true);
+          break;
         case 'gameover':
           showOnlineGameover(ev.winner, ev.scores);
           await wait(200);
@@ -1053,6 +1066,9 @@
 
   function applyView(view) {
     G.view = view;
+    // Your seat can change in the lobby when you switch teams.
+    const meSeat = view.seats && view.seats.find((x) => x.you);
+    if (meSeat) G.viewSeat = meSeat.seat;
     if (view.rules) G.rules = Object.assign({}, G.rules, view.rules);
     G.scores = view.scores.slice();
     G.books = view.books.slice();
@@ -1122,31 +1138,91 @@
     }
   }
 
+  // Lobby: two team cards. Picking a team picks your partner; the first player
+  // on a team is its captain and gets an editable team name.
+  const teamNameInputs = {};
+  let pendingLobby = null; // a lobby update that arrived while the captain was typing
+  function teamNameInput(team) {
+    if (teamNameInputs[team]) return teamNameInputs[team];
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.maxLength = 18; inp.className = 'team-name-input';
+    inp.setAttribute('aria-label', 'Team name'); inp.autocomplete = 'off';
+    let t = null;
+    const send = () => Online.conn && Online.conn.send({ type: 'teamName', team, name: inp.value });
+    inp.addEventListener('input', () => { clearTimeout(t); t = setTimeout(send, 450); });
+    inp.addEventListener('change', () => { clearTimeout(t); send(); });
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') inp.blur(); });
+    inp.addEventListener('blur', () => setTimeout(() => {
+      if (pendingLobby) { const v = pendingLobby; pendingLobby = null; showLobby(v); }
+    }, 0));
+    teamNameInputs[team] = inp;
+    return inp;
+  }
+
   function showLobby(view) {
+    // Don't rebuild under the captain's fingers — apply once they finish typing.
+    if (Object.values(teamNameInputs).some((i) => i === document.activeElement)) { pendingLobby = view; return; }
     $('lobby-code').textContent = Online.code;
     const link = inviteLink(Online.code);
     if (window.QRCode) QRCode.render($('lobby-qr'), link);
-    const roster = $('lobby-roster'); roster.innerHTML = '';
-    const seatLetter = ['S', 'W', 'N', 'E'];
-    view.seats.forEach((s) => {
-      const li = document.createElement('li');
-      li.className = 'team-' + (s.team === 0 ? 'a' : 'b');
-      const av = document.createElement('span');
-      av.className = 'avatar';
-      if (s.kind === 'empty') { av.classList.add('seat-empty'); av.textContent = seatLetter[s.seat]; }
-      else applyAvatar(av, avatarFrom(s.avatar, (s.name || 'seat') + '#' + s.seat));
-      const nm = document.createElement('span');
-      nm.className = 'r-name';
-      nm.textContent = s.kind === 'empty' ? '— open —' : (s.you ? 'You' : (s.name || 'Player'));
-      li.appendChild(av); li.appendChild(nm);
-      const tag = s.you ? '<span class="r-tag you">you</span>'
-        : s.isHost ? '<span class="r-tag host">host</span>'
-        : s.kind === 'ai' ? '<span class="r-tag">bot</span>'
-        : s.kind === 'empty' ? '<span class="r-tag">open</span>'
-        : (!s.connected ? '<span class="r-tag">away</span>' : '');
-      if (tag) li.insertAdjacentHTML('beforeend', tag);
-      roster.appendChild(li);
-    });
+    const box = $('lobby-teams');
+    box.innerHTML = '';
+    const me = view.seats.find((x) => x.you);
+    const myTeamNow = me ? me.team : null;
+    for (const team of [0, 1]) {
+      const info = (view.teams && view.teams[team]) || { name: team ? 'Team B' : 'Team A' };
+      const card = document.createElement('div');
+      card.className = 'team-card team-' + (team ? 'b' : 'a') + (myTeamNow === team ? ' mine' : '');
+
+      const head = document.createElement('div'); head.className = 'team-head';
+      if (info.youAreCaptain) {
+        const inp = teamNameInput(team);
+        inp.value = info.name;
+        head.appendChild(inp);
+        head.insertAdjacentHTML('beforeend', '<span class="team-captain">★ You’re captain — name your team</span>');
+      } else {
+        const h = document.createElement('h3'); h.className = 'team-title'; h.textContent = info.name;
+        head.appendChild(h);
+        const cap = view.seats[info.captainSeat];
+        const c = document.createElement('span'); c.className = 'team-captain';
+        c.textContent = cap ? `★ Captain: ${cap.name || 'Player'}` : 'No captain yet — join to name it';
+        head.appendChild(c);
+      }
+      card.appendChild(head);
+
+      const ul = document.createElement('ul'); ul.className = 'roster';
+      for (const seatNo of [team, team + 2]) {
+        const s = view.seats[seatNo];
+        const li = document.createElement('li');
+        const av = document.createElement('span'); av.className = 'avatar';
+        if (s.kind === 'empty') { av.classList.add('seat-empty'); av.textContent = '+'; }
+        else applyAvatar(av, avatarFrom(s.avatar, (s.name || 'seat') + '#' + s.seat));
+        const nm = document.createElement('span'); nm.className = 'r-name';
+        nm.textContent = s.kind === 'empty' ? 'Open seat' : (s.you ? 'You' : (s.name || 'Player'));
+        if (s.seat === info.captainSeat) { nm.insertAdjacentHTML('afterbegin', '<span class="cap-star" title="Team captain">★</span>'); }
+        li.appendChild(av); li.appendChild(nm);
+        const tags = [];
+        if (s.isHost) tags.push('<span class="r-tag host">host</span>');
+        if (s.kind === 'ai') tags.push('<span class="r-tag">bot</span>');
+        else if (s.kind === 'human' && !s.connected) tags.push('<span class="r-tag">away</span>');
+        li.insertAdjacentHTML('beforeend', tags.join(''));
+        ul.appendChild(li);
+      }
+      card.appendChild(ul);
+
+      if (me && myTeamNow !== team) {
+        const open = [team, team + 2].some((n) => view.seats[n].kind === 'empty');
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'btn ghost small join-team';
+        btn.textContent = open ? `Join ${info.name}` : 'Team full';
+        btn.disabled = !open;
+        btn.addEventListener('click', () => Online.conn && Online.conn.send({ type: 'team', team }));
+        card.appendChild(btn);
+      } else if (me) {
+        card.insertAdjacentHTML('beforeend', '<p class="team-you">Your team</p>');
+      }
+      box.appendChild(card);
+    }
     $('btn-start-online').style.display = view.hostToken ? '' : 'none';
     $('lobby-wait').style.display = view.hostToken ? 'none' : '';
     $('modal-online').classList.remove('show');
@@ -1165,10 +1241,10 @@
     $('summary-body').innerHTML =
       `${teamLabel(bidTeam)} took <b>${r.books[bidTeam]}</b> of 13 books — needed <b>${r.needed}</b>.` +
       `<span class="delta ${deltaCls}">${r.delta >= 0 ? '+' : ''}${r.delta} ${teamLabel(bidTeam)}</span>` +
-      `Score: Us <b>${r.scores[us]}</b> · Them <b>${r.scores[them]}</b>`;
+      `Score: ${teamLabel(us)} <b>${r.scores[us]}</b> · ${teamLabel(them)} <b>${r.scores[them]}</b>`;
     const btn = $('btn-next-hand');
-    btn.textContent = Online.isHost ? 'Deal Next Hand' : 'Waiting for host…';
-    btn.disabled = !Online.isHost;
+    btn.textContent = amHost() ? 'Deal Next Hand' : 'Waiting for host…';
+    btn.disabled = !amHost();
     $('modal-summary').classList.add('show');
   }
 
@@ -1178,11 +1254,11 @@
     const stamp = $('gameover-stamp');
     stamp.className = 'stamp ' + (iWon ? 'made' : 'set');
     stamp.textContent = iWon ? 'GAME' : 'BUSTED';
-    $('gameover-title').textContent = iWon ? 'Your team takes the game!' : 'The other team takes it.';
-    $('gameover-body').innerHTML = `Final: Us <b>${scores[us]}</b> · Them <b>${scores[1 - us]}</b>.`;
+    $('gameover-title').textContent = iWon ? `${teamLabel(us)} take the game!` : `${teamLabel(1 - us)} take the game.`;
+    $('gameover-body').innerHTML = `Final: ${teamLabel(us)} <b>${scores[us]}</b> · ${teamLabel(1 - us)} <b>${scores[1 - us]}</b>.`;
     const btn = $('btn-rematch');
-    btn.textContent = Online.isHost ? 'Run It Back' : 'Waiting for host…';
-    btn.disabled = !Online.isHost;
+    btn.textContent = amHost() ? 'Run It Back' : 'Waiting for host…';
+    btn.disabled = !amHost();
     $('modal-gameover').classList.add('show');
   }
 
@@ -1252,13 +1328,13 @@
   });
   $('btn-next-hand').addEventListener('click', () => {
     $('modal-summary').classList.remove('show');
-    if (G.mode === 'online') { if (Online.isHost) Online.conn.send({ type: 'nextHand' }); return; }
+    if (G.mode === 'online') { if (amHost()) Online.conn.send({ type: 'nextHand' }); return; }
     G.dealer = (G.dealer + 1) % 4;
     startHand();
   });
   $('btn-rematch').addEventListener('click', () => {
     $('modal-gameover').classList.remove('show');
-    if (G.mode === 'online') { if (Online.isHost) Online.conn.send({ type: 'start' }); return; }
+    if (G.mode === 'online') { if (amHost()) Online.conn.send({ type: 'start' }); return; }
     newGame();
   });
   $('btn-new-game').addEventListener('click', () => {
@@ -1273,7 +1349,7 @@
   $('btn-host').addEventListener('click', hostTable);
   $('btn-join').addEventListener('click', joinTable);
   $('join-code').addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase(); });
-  $('btn-start-online').addEventListener('click', () => { if (Online.isHost) Online.conn.send({ type: 'start' }); });
+  $('btn-start-online').addEventListener('click', () => { if (amHost()) Online.conn.send({ type: 'start' }); });
   $('btn-leave-online').addEventListener('click', () => {
     try { Online.conn && Online.conn.send({ type: 'leave' }); Online.conn && Online.conn.close(); } catch (_) { /* ignore */ }
     location.reload();

@@ -135,7 +135,12 @@ export class GameRoom {
     else if (msg.type === 'nextHand') out = this.room.nextHand(meta.token);
     else if (msg.type === 'intent') out = this.room.submit(meta.token, msg.intent);
     else if (msg.type === 'profile') out = this.room.setProfile(meta.token, msg.name, msg.avatar) || { events: [] };
-    else if (msg.type === 'leave') { this.room.leave(meta.token); out = { events: [] }; }
+    else if (msg.type === 'team') out = this.room.chooseTeam(meta.token, msg.team);
+    else if (msg.type === 'teamName') out = this.room.setTeamName(meta.token, msg.team, msg.name);
+    else if (msg.type === 'leave') {
+      out = this.room.leave(meta.token);       // mid-game: a bot takes the seat
+      ws.serializeAttachment({ token: null }); // this socket no longer holds a seat
+    }
     else return this._send(ws, { type: 'error', error: 'unknown-type' });
 
     if (out && out.error) return this._send(ws, { type: 'error', error: out.error });
@@ -159,9 +164,11 @@ export class GameRoom {
     // (e.g. they reconnected in a new tab before the old one closed).
     const others = this.state.getWebSockets().filter((s) => s !== ws);
     const stillHere = others.some((s) => (s.deserializeAttachment() || {}).token === meta.token);
-    if (!stillHere) this.room.setConnected(meta.token, false);
+    // A bot covers the seat immediately (even if it was their turn); they get
+    // it back if they reconnect with their token.
+    const out = stillHere ? { events: [] } : this.room.drop(meta.token);
     await this._save();
-    this._broadcast(null, ws);
+    this._broadcast(out.events, ws);
   }
 
   // ---- fan-out ----

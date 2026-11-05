@@ -33,9 +33,11 @@
     if (a.length > 40000 || !/^data:image\/(jpeg|png|webp);base64,/.test(a)) return null;
     return a;
   }
+  // Names show up in other players' table talk, so no markup characters.
+  function stripMarkup(n) { return String(n).replace(/[<>]/g, '').replace(/\s+/g, ' ').trim(); }
   function cleanName(n, fallback) {
-    if (typeof n !== 'string' || !n.trim()) return fallback;
-    return n.trim().slice(0, 16);
+    if (typeof n !== 'string' || !stripMarkup(n)) return fallback;
+    return stripMarkup(n).slice(0, 16);
   }
 
   const DEFAULT_AI_NAMES = ['Pearl', 'Marcus', 'Deacon', 'Ruby'];
@@ -55,6 +57,9 @@
       this.handNo = 0;
       this.dealer = Math.floor(this.rng() * 4);
       this.learner = aiLib.createLearner();
+      this.teamNames = ['Team A', 'Team B'];
+      this.captains = [null, null];   // token of each team's captain
+      this.joinSeq = 0;
       this._resetHand();
     }
 
@@ -75,7 +80,10 @@
       spot.token = token;
       spot.connected = true;
       spot.ai = null;
+      spot.left = false;
+      spot.joinedTeamAt = ++this.joinSeq;
       if (!this.hostToken) this.hostToken = token; // first to join hosts
+      this._updateCaptains();
       return { seat: spot.seat, token, host: this.hostToken === token };
     }
 
@@ -90,7 +98,7 @@
 
     reclaim(token) {
       const s = this.seats.find((x) => x.token === token);
-      if (!s) return { error: 'unknown' };
+      if (!s || s.kind !== 'human') return { error: 'unknown' };
       s.connected = true;
       return { seat: s.seat, host: this.hostToken === token };
     }
@@ -100,18 +108,83 @@
       if (s) s.connected = on;
     }
 
-    // Host leaves in lobby → hand off host to another human, or reset seat.
+    // Host powers (start / deal next hand) belong to the host while they're
+    // connected; if they drop, the next connected human can carry on, so the
+    // table never gets stuck waiting on someone who's gone.
+    effectiveHost() {
+      const host = this.seats.find((x) => x.token && x.token === this.hostToken);
+      if (host && host.kind === 'human' && host.connected) return this.hostToken;
+      const next = this.seats.find((x) => x.kind === 'human' && x.connected && x.token);
+      return next ? next.token : this.hostToken;
+    }
+
+    // A player's connection dropped (closed the tab, lost signal). Mid-game, a
+    // bot covers their seat right away — including the turn they were on — and
+    // they take it back if they reconnect. Returns events for the bot's moves.
+    drop(token) {
+      this.setConnected(token, false);
+      const events = [];
+      if (this.phase !== 'lobby') this._advance(events);
+      return { events };
+    }
+
+    // A player chose "Leave Table". In the lobby their seat simply opens up.
+    // Mid-game a bot takes the seat for good (they can't reclaim it), and if
+    // it was their turn the bot plays it immediately.
     leave(token) {
       const s = this.seats.find((x) => x.token === token);
-      if (!s) return;
-      if (this.phase === 'lobby') {
-        s.kind = 'empty'; s.name = null; s.token = null; s.connected = false;
-      } else {
-        s.connected = false; // mid-game: keep the seat, AI covers turns
-      }
+      if (!s) return { events: [] };
       if (this.hostToken === token) {
         const next = this.seats.find((x) => x.kind === 'human' && x.token && x.token !== token);
         this.hostToken = next ? next.token : null;
+      }
+      const events = [];
+      if (this.phase === 'lobby') {
+        Object.assign(s, { kind: 'empty', name: null, avatar: null, token: null, connected: false, left: false });
+      } else {
+        Object.assign(s, { kind: 'ai', token: null, connected: false, left: true });
+        events.push({ t: 'botTakeover', seat: s.seat, name: s.name });
+        this._advance(events);
+      }
+      this._updateCaptains();
+      return { events };
+    }
+
+    // ---- teams (lobby) ------------------------------------------------------
+    // Seats 0 & 2 are Team A, 1 & 3 are Team B — picking a team picks your
+    // partner. The first person on a team is its captain and names it.
+
+    chooseTeam(token, team) {
+      if (this.phase !== 'lobby') return { error: 'teams-locked' };
+      if (team !== 0 && team !== 1) return { error: 'bad-team' };
+      const from = this.seats.find((x) => x.token === token);
+      if (!from) return { error: 'not-seated' };
+      if (from.seat % 2 === team) return {};
+      const to = this.seats.find((x) => x.seat % 2 === team && x.kind === 'empty');
+      if (!to) return { error: 'team-full' };
+      for (const k of ['kind', 'name', 'avatar', 'token', 'connected', 'ai', 'left']) to[k] = from[k];
+      to.joinedTeamAt = ++this.joinSeq;
+      Object.assign(from, { kind: 'empty', name: null, avatar: null, token: null, connected: false, ai: null, left: false });
+      this._updateCaptains();
+      return {};
+    }
+
+    setTeamName(token, team, name) {
+      if (team !== 0 && team !== 1) return { error: 'bad-team' };
+      if (this.captains[team] !== token) return { error: 'not-captain' };
+      const clean = typeof name === 'string' ? stripMarkup(name).slice(0, 18) : '';
+      this.teamNames[team] = clean || (team === 0 ? 'Team A' : 'Team B');
+      return {};
+    }
+
+    // Captain = the current captain if still a human on the team, else the
+    // human who has been on that team the longest.
+    _updateCaptains() {
+      for (const team of [0, 1]) {
+        const members = this.seats.filter((x) => x.seat % 2 === team && x.kind === 'human' && x.token);
+        if (members.some((m) => m.token === this.captains[team])) continue;
+        members.sort((a, b) => (a.joinedTeamAt || 0) - (b.joinedTeamAt || 0));
+        this.captains[team] = members.length ? members[0].token : null;
       }
     }
 
@@ -136,7 +209,7 @@
 
     // Host starts: empty seats become AI, then deal and open the auction.
     start(token) {
-      if (token !== this.hostToken) return { error: 'not-host' };
+      if (token !== this.effectiveHost()) return { error: 'not-host' };
       if (this.phase !== 'lobby' && this.phase !== 'handover' && this.phase !== 'gameover')
         return { error: 'in-progress' };
       let aiN = 0;
@@ -155,7 +228,7 @@
 
     // Begin the next hand (used by start and by "next hand" after a hand ends).
     nextHand(token) {
-      if (token !== this.hostToken) return { error: 'not-host' };
+      if (token !== this.effectiveHost()) return { error: 'not-host' };
       if (this.phase !== 'handover') return { error: 'bad-phase' };
       const events = [];
       this.dealer = (this.dealer + 1) % 4;
@@ -383,7 +456,12 @@
         dealer: this.dealer,
         turn: this.turn,
         need: this.need,
-        hostToken: this.hostToken === token, // is *you* the host
+        hostToken: token != null && this.effectiveHost() === token, // can *you* start / deal
+        teams: [0, 1].map((t) => ({
+          name: this.teamNames[t],
+          captainSeat: this.seatOf(this.captains[t]),
+          youAreCaptain: token != null && this.captains[t] === token,
+        })),
         scores: this.scores.slice(),
         books: this.books.slice(),
         contract: this.contract,
@@ -393,7 +471,8 @@
         counts: this.hands.map((h) => (h ? h.length : 0)),
         seats: this.seats.map((s) => ({
           seat: s.seat, kind: s.kind, name: s.name, avatar: s.avatar || null,
-          connected: s.connected, team: s.seat % 2, isHost: this.hostToken === s.token,
+          connected: s.connected, team: s.seat % 2, left: !!s.left,
+          isHost: s.token != null && this.hostToken === s.token,
           you: s.token === token && token != null,
         })),
         result: this.phase === 'handover' || this.phase === 'gameover' ? this.lastResult : null,

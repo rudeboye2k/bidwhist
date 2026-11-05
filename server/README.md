@@ -65,7 +65,14 @@ Client → server:
 | `{type:'nextHand'}` | host only — deal the next hand after one ends |
 | `{type:'intent', intent}` | a move: `{type:'bid'\|'declare'\|'discard'\|'play', ...}` |
 | `{type:'profile', name?, avatar?}` | update your display name / avatar mid-session |
-| `{type:'leave'}` | give up your seat |
+| `{type:'team', team}` | lobby only — move to Team A (`0`) or B (`1`); this picks your partner |
+| `{type:'teamName', team, name}` | team captain only (first player on the team) — rename it (≤ 18 chars) |
+| `{type:'leave'}` | give up your seat — mid-game a bot takes it for good and plays at once |
+
+A dropped connection (no `leave`) also hands the seat to a bot immediately,
+including a turn in progress, but the player can reclaim it with their token.
+If the host is away, host powers (start / deal next hand) pass to the next
+connected player. Names and team names have `<` `>` stripped server-side.
 
 `avatar` is either a cartoon code `cartoon:E.P` (animal index, color index —
 each client draws it with its own emoji font, so it works on every device) or a

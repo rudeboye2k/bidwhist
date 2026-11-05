@@ -30,8 +30,19 @@ the Join screen pre-filled, ready to go. They can also
 **Join** and type the key by hand. Seats nobody takes are played by the adaptive
 AI, so a table of one human + three bots and a table of four humans use the exact
 same game. You can run **any number of tables at once** — each game key is a
-completely separate room, so games never bleed into each other. If you drop,
-your browser remembers your seat and can reconnect to the same table.
+completely separate room, so games never bleed into each other.
+
+**Teams & partners.** In the lobby, each player picks **Team A or Team B** —
+which is how you choose your partner. The first player on a team is its
+**captain** and names it (only the captain can); team names then replace
+"Us/Them" on the scoreboard and in results. Teams lock when the game starts,
+and any open seat is filled by a bot.
+
+**When someone leaves.** A bot takes their seat immediately and plays on —
+even if it was their turn — so the table never stalls. Tapping **Leave Table**
+hands the seat to the bot for good; if a player just loses signal or closes
+the tab, the bot covers for them and they get their seat back by reopening the
+game. If the host leaves, the next player inherits starting / dealing.
 
 The server is a Durable Object (one isolated object per game key) living in
 the same Worker that serves the site, so the page's own address *is* the server

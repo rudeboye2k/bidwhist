@@ -154,5 +154,66 @@ check('rooms have distinct codes', r1.code !== r2.code);
   check('oversized photo rejected', r.seats[d.seat].avatar === null);
 }
 
+// ---- teams: pick a team (= pick your partner), captain names it ----
+{
+  const r = new Room('TEAMS', {}, { rng: seeded(21) });
+  const ann = r.join('Ann');   // seat 0 → Team A (first on A → captain)
+  const ben = r.join('Ben');   // seat 1 → Team B (captain of B)
+  const cal = r.join('Cal');   // seat 2 → Team A
+  check('Ann captains Team A (first on it)', r.captains[0] === ann.token);
+  check('Ben captains Team B', r.captains[1] === ben.token);
+  check('non-captain cannot rename', r.setTeamName(cal.token, 0, 'Nope').error === 'not-captain');
+  check('captain renames team', !r.setTeamName(ann.token, 0, '  Spade   Kings  ').error && r.teamNames[0] === 'Spade Kings');
+  // Cal switches to Team B to partner Ben
+  check('Cal moves to Team B', !r.chooseTeam(cal.token, 1).error && r.seatOf(cal.token) % 2 === 1);
+  check('Cal and Ben are now partners', (r.seatOf(cal.token) + 2) % 4 === r.seatOf(ben.token));
+  check('Ben is still Team B captain (got there first)', r.captains[1] === ben.token);
+  const dee = r.join('Dee');   // fills the open Team A seat
+  check('a full team rejects another player', r.chooseTeam(dee.token, 1).error === 'team-full' || r.seatOf(dee.token) % 2 === 1);
+  // captain leaves their team → captaincy passes to the remaining member
+  r.chooseTeam(ann.token, 1); // B is full → stays on A
+  const v = r.viewFor(ann.token);
+  check('view exposes team names + who captains', v.teams[0].name === 'Spade Kings' && v.teams[0].youAreCaptain === true);
+  check('seat token follows the player when they switch teams', r.viewFor(cal.token).seats.find((x) => x.you).seat === r.seatOf(cal.token));
+  r.start(ann.token);
+  check('teams lock once the game starts', r.chooseTeam(cal.token, 0).error === 'teams-locked');
+}
+
+// ---- leaving mid-game: a bot takes the seat and plays at once ----
+{
+  const r = new Room('LEAVE', {}, { rng: seeded(31) });
+  const a = r.join('Ann'), b = r.join('Ben');
+  r.start(a.token);
+  // drive until it's Ben's turn, then Ben leaves
+  let g = 0;
+  while (r.turn !== b.seat && r.phase !== 'gameover' && g++ < 5000) {
+    if (r.phase === 'handover') { r.nextHand(a.token); continue; }
+    autoAct(r, a.token);
+  }
+  const before = { turn: r.turn, need: r.need };
+  const out = r.leave(b.token);
+  check('Ben\'s seat became a bot', r.seats[b.seat].kind === 'ai' && r.seats[b.seat].left === true);
+  check('bot took Ben\'s pending turn immediately (no stall)', before.turn === b.seat && r.turn !== b.seat && out.events.length > 1);
+  check('a player who left cannot reclaim the seat', r.reclaim(b.token).error === 'unknown');
+}
+
+// ---- disconnect mid-turn: bot covers, player can come back ----
+{
+  const r = new Room('DROP', {}, { rng: seeded(41) });
+  const a = r.join('Ann'), b = r.join('Ben');
+  r.start(a.token);
+  let g = 0;
+  while (r.turn !== b.seat && r.phase !== 'gameover' && g++ < 5000) {
+    if (r.phase === 'handover') { r.nextHand(a.token); continue; }
+    autoAct(r, a.token);
+  }
+  r.drop(b.token);
+  check('disconnected player\'s turn is played by a bot', r.turn !== b.seat);
+  check('dropped player reclaims their seat on reconnect', r.reclaim(b.token).seat === b.seat && r.seats[b.seat].kind === 'human');
+  // host drops → the other human can deal
+  r.drop(a.token);
+  check('host away → another connected player gets host powers', r.effectiveHost() === b.token);
+}
+
 if (failures) { console.error('\n' + failures + ' failure(s)'); process.exit(1); }
 console.log('\nAll room-core tests passed.');
