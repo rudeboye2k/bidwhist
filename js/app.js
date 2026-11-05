@@ -566,7 +566,7 @@
     const box = $('hand');
     box.innerHTML = '';
     if (!G.hands || !G.hands[G.viewSeat]) return;
-    const cards = E.sortHand(G.hands[G.viewSeat], sortDirection());
+    const cards = E.sortHand(G.hands[G.viewSeat], sortDirection(), G.contract);
     cards.forEach((card, i) => {
       const el = cardEl(card, true);
       el.style.setProperty('--deal-delay', (i * 0.03) + 's');

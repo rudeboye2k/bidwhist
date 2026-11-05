@@ -188,10 +188,19 @@
   }
 
   // Sort a hand for display: suits grouped, jokers first, direction-aware.
-  function sortHand(hand, direction) {
-    const suitOrder = { S: 0, H: 1, C: 2, D: 3, J: -1 };
+  // Once trump is named, the trump suit moves to the left end with the two
+  // jokers (its top cards) right beside it: Big, Little, then trump high to
+  // low. In No-Trump the jokers are dead, so they go to the far right. Suits
+  // keep alternating black/red (the order is just rotated to start at trump).
+  function sortHand(hand, direction, contract) {
+    const BASE = ['S', 'H', 'C', 'D'];
+    const trump = contract && contract.type !== 'notrump' ? contract.trump : null;
+    const start = trump ? BASE.indexOf(trump) : 0;
+    const suitOrder = {};
+    BASE.forEach((s, i) => { suitOrder[s] = (i - start + 4) % 4; });
+    const jokersLast = !!(contract && contract.type === 'notrump');
     return hand.slice().sort((a, b) => {
-      if (!!a.joker !== !!b.joker) return a.joker ? -1 : 1;
+      if (!!a.joker !== !!b.joker) return (a.joker ? -1 : 1) * (jokersLast ? -1 : 1);
       if (a.joker && b.joker) return a.joker === 'big' ? -1 : 1;
       if (a.suit !== b.suit) return suitOrder[a.suit] - suitOrder[b.suit];
       return rankPower(b.rank, direction) - rankPower(a.rank, direction);

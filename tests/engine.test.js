@@ -104,6 +104,19 @@ check('NT: only jokers left — may lead one', legal.length === 2);
 legal = E.legalPlays([BJ, c('S', 3)], [], { amount: 4, type: 'uptown', trump: 'H', direction: 'uptown' });
 check('trump contract: jokers may be led', legal.length === 2);
 
+// ---- hand sorting: jokers sit with trump ----
+{
+  const hand = [c('S', 14), c('H', 5), BJ, c('D', 9), LJ, c('H', 13), c('C', 2)];
+  const ids = (cards) => cards.map((x) => x.id).join(' ');
+  const hearts = E.sortHand(hand, 'uptown', { amount: 4, type: 'uptown', trump: 'H', direction: 'uptown' });
+  check('trump hearts: jokers then hearts on the left', ids(hearts) === 'JB JL H13 H5 C2 D9 S14');
+  const clubsDown = E.sortHand(hand, 'downtown', { amount: 4, type: 'downtown', trump: 'C', direction: 'downtown' });
+  check('trump clubs downtown: jokers next to clubs', ids(clubsDown).startsWith('JB JL C2'));
+  const nt = E.sortHand(hand, 'uptown', { amount: 4, type: 'notrump', trump: null, direction: 'uptown' });
+  check('no-trump: dead jokers go to the far right', ids(nt).endsWith('JB JL'));
+  check('before a contract: jokers lead the hand', ids(E.sortHand(hand, 'uptown')).startsWith('JB JL S14'));
+}
+
 // ---- scoring ----
 const rules = E.DEFAULT_RULES;
 let s = E.scoreHand(4, upS, 11, rules);

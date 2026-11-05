@@ -555,7 +555,7 @@
         const dir = this.contract ? (this.contract.type === 'notrump' ? this.contract.direction : this.contract.type) : 'uptown';
         view.you = {
           seat,
-          hand: E.sortHand(this.hands[seat], dir),
+          hand: E.sortHand(this.hands[seat], dir, this.contract),
           mustBid: this.need === 'bid' && this.turn === seat && this._mustBid(seat),
           legalIds: (this.turn === seat && this.need === 'play')
             ? E.legalPlays(this.hands[seat], this.trick, this.contract).map((c) => c.id)
