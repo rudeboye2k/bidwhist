@@ -33,7 +33,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Libre+Franklin:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=8">
+<link rel="stylesheet" href="styles.css?v=9">
+<script>try{var f=localStorage.getItem('bidwhist.felt');if(f)document.documentElement.setAttribute('data-felt',f)}catch(e){}</script>
 </head>
 <body>
 <div class="room" id="app">
@@ -51,6 +52,7 @@
       <button class="btn ghost" id="btn-rules" type="button">How to Play</button>
       <button class="btn ghost" id="btn-settings" type="button">Table Rules</button>
       <button class="btn ghost" id="btn-new-game" type="button">New Game</button>
+      <button class="btn ghost" id="btn-sound" type="button" aria-pressed="true">Sound On</button>
     </nav>
   </header>
 
@@ -61,17 +63,17 @@
 
         <div class="seat seat-north" id="seat-2">
           <div class="opp-hand" id="opp-hand-2"></div>
-          <div class="nameplate" id="plate-2"><span class="avatar"></span><span class="np-text"><span class="pname">Marcus</span><span class="prole">your partner</span></span></div>
+          <div class="nameplate" id="plate-2"><span class="avatar"></span><span class="np-text"><span class="pname">Marcus</span><span class="prole">your partner</span></span><span class="np-books" aria-label="books taken"></span></div>
           <div class="bid-chip" id="chip-2"></div>
         </div>
         <div class="seat seat-west" id="seat-1">
           <div class="opp-hand vertical" id="opp-hand-1"></div>
-          <div class="nameplate" id="plate-1"><span class="avatar"></span><span class="np-text"><span class="pname">Pearl</span><span class="prole">west</span></span></div>
+          <div class="nameplate" id="plate-1"><span class="avatar"></span><span class="np-text"><span class="pname">Pearl</span><span class="prole">west</span></span><span class="np-books" aria-label="books taken"></span></div>
           <div class="bid-chip" id="chip-1"></div>
         </div>
         <div class="seat seat-east" id="seat-3">
           <div class="opp-hand vertical" id="opp-hand-3"></div>
-          <div class="nameplate" id="plate-3"><span class="avatar"></span><span class="np-text"><span class="pname">Deacon</span><span class="prole">east</span></span></div>
+          <div class="nameplate" id="plate-3"><span class="avatar"></span><span class="np-text"><span class="pname">Deacon</span><span class="prole">east</span></span><span class="np-books" aria-label="books taken"></span></div>
           <div class="bid-chip" id="chip-3"></div>
         </div>
 
@@ -79,12 +81,13 @@
           <div class="kitty" id="kitty" title="The kitty"></div>
           <div class="trick" id="trick"></div>
           <div class="table-msg" id="table-msg"></div>
+          <div class="table-banner" id="table-banner" aria-live="polite"></div>
         </div>
 
         <div class="seat seat-south" id="seat-0">
           <div class="bid-chip" id="chip-0"></div>
           <div class="hand" id="hand"></div>
-          <div class="nameplate you" id="plate-0"><span class="avatar"></span><span class="np-text"><span class="pname">You</span><span class="prole">south</span></span></div>
+          <div class="nameplate you" id="plate-0" role="button" tabindex="0" title="Edit your name &amp; avatar"><span class="avatar"></span><span class="np-text"><span class="pname">You</span><span class="prole">south</span></span><span class="np-books" aria-label="books taken"></span></div>
         </div>
       </div>
 
@@ -93,22 +96,24 @@
 
     <aside class="side">
       <div class="panel score-panel">
-        <h2 class="panel-title">Score <small id="score-target"></small></h2>
-        <div class="score-row">
-          <div class="score-box us"><span class="score-team" id="label-us">Us</span><span class="score-num" id="score-us">0</span></div>
-          <div class="score-vs">—</div>
-          <div class="score-box them"><span class="score-team" id="label-them">Them</span><span class="score-num" id="score-them">0</span></div>
+        <h2 class="panel-title">Scoreboard <small id="score-target"></small></h2>
+        <div class="sb-head" aria-hidden="true"><span></span><span>books</span><span>pts</span></div>
+        <div class="sb-team us">
+          <span class="sb-name" id="label-us">Us</span>
+          <b class="sb-books" id="books-us">0</b>
+          <b class="sb-pts" id="score-us">0</b>
+          <span class="sb-bar"><i id="bar-us"></i></span>
         </div>
-      </div>
-
-      <div class="panel contract-panel" id="contract-panel">
-        <h2 class="panel-title">This Hand</h2>
-        <div class="contract-line" id="contract-line">No contract yet</div>
-        <div class="books-row">
-          <div class="books-box"><span id="books-label-us">Us</span><b id="books-us">0</b></div>
-          <div class="books-box"><span id="books-label-them">Them</span><b id="books-them">0</b></div>
+        <div class="sb-team them">
+          <span class="sb-name" id="label-them">Them</span>
+          <b class="sb-books" id="books-them">0</b>
+          <b class="sb-pts" id="score-them">0</b>
+          <span class="sb-bar"><i id="bar-them"></i></span>
         </div>
-        <div class="set-meter" id="set-meter"></div>
+        <div class="sb-hand" id="contract-panel">
+          <div class="contract-line" id="contract-line">No contract yet</div>
+          <div class="set-meter" id="set-meter"></div>
+        </div>
       </div>
 
       <div class="panel log-panel">
@@ -121,6 +126,12 @@
   <!-- Splash -->
   <div class="overlay show" id="splash">
     <div class="splash-card">
+      <div class="splash-fan" aria-hidden="true">
+        <div class="card back"></div>
+        <div class="card black"><span class="idx">A<small>&spades;</small></span><span class="pip">&spades;</span></div>
+        <div class="card red"><span class="idx">K<small>&hearts;</small></span><span class="pip">&hearts;</span></div>
+        <div class="card kitty-face"><span class="kf-cat">🐱</span><span class="kf-lab">kitty</span></div>
+      </div>
       <p class="splash-kicker">Bid Whist &middot; a rent-party classic</p>
       <h2 class="splash-title">Give Me Da <em>Kitty</em></h2>
       <p class="splash-tag">Bid it. Win the kitty. Run a Boston.</p>
@@ -231,7 +242,8 @@
 
   <!-- Hand summary -->
   <div class="overlay" id="modal-summary">
-    <div class="modal">
+    <div class="modal celebrate">
+      <div class="burst" aria-hidden="true"></div>
       <div class="stamp" id="summary-stamp"></div>
       <h2 class="modal-title" id="summary-title"></h2>
       <div class="summary-body" id="summary-body"></div>
@@ -243,7 +255,7 @@
   <div class="overlay" id="modal-settings">
     <div class="modal">
       <h2 class="modal-title">Table Rules</h2>
-      <p class="modal-note">Every table plays it a little different. Changes take effect next hand.</p>
+      <p class="modal-note">Every table plays it a little different. Rule changes take effect next hand.</p>
       <form id="settings-form" class="settings">
         <label class="setting"><span>Minimum bid</span>
           <select name="minBid"><option value="3">3</option><option value="4">4</option></select>
@@ -257,6 +269,14 @@
         <label class="setting check"><input type="checkbox" name="sportKitty"><span>Sport the kitty (shown to the whole table)</span></label>
         <label class="setting check"><input type="checkbox" name="bostonDoubles"><span>A made 7-bid (Boston) scores double</span></label>
       </form>
+      <h3 class="settings-sub">Look &amp; sound</h3>
+      <div class="felt-picks" id="felt-picks" role="radiogroup" aria-label="Table felt">
+        <button type="button" class="felt-pick" data-felt="green" role="radio"><i></i>Classic green</button>
+        <button type="button" class="felt-pick" data-felt="burgundy" role="radio"><i></i>Burgundy</button>
+        <button type="button" class="felt-pick" data-felt="midnight" role="radio"><i></i>Midnight blue</button>
+        <button type="button" class="felt-pick" data-felt="purple" role="radio"><i></i>Rent-party purple</button>
+      </div>
+      <label class="setting check pref-sound"><input type="checkbox" id="pref-sound"><span>Sound effects &amp; vibration</span></label>
       <button class="btn primary" id="btn-settings-done" type="button">Done</button>
     </div>
   </div>
@@ -290,7 +310,8 @@
 
   <!-- Game over -->
   <div class="overlay" id="modal-gameover">
-    <div class="modal">
+    <div class="modal celebrate">
+      <div class="burst" aria-hidden="true"></div>
       <div class="stamp" id="gameover-stamp"></div>
       <h2 class="modal-title" id="gameover-title"></h2>
       <div class="summary-body" id="gameover-body"></div>
@@ -300,16 +321,16 @@
   </div>
 </div>
 
-<script src="js/engine.js?v=8"></script>
-<script src="js/ai.js?v=8"></script>
+<script src="js/engine.js?v=9"></script>
+<script src="js/ai.js?v=9"></script>
 <script>
   // The site and the game server are one Cloudflare Worker, so the server is
   // simply this page's own address — nothing to configure. Only if you host the
   // page somewhere else (e.g. GitHub Pages) would you point it at the Worker:
   // window.BIDWHIST_SERVER = "https://bidwhist.<your-subdomain>.workers.dev";
 </script>
-<script src="js/qrcode.js?v=8"></script>
-<script src="js/net.js?v=8"></script>
-<script src="js/app.js?v=8"></script>
+<script src="js/qrcode.js?v=9"></script>
+<script src="js/net.js?v=9"></script>
+<script src="js/app.js?v=9"></script>
 </body>
 </html>

@@ -6,6 +6,7 @@
   --mahogany: #3d1d16;
   --felt: #14523c;
   --felt-deep: #0a2e21;
+  --felt-hi: #1c6a4e;
   --gold: #d4a94e;
   --gold-bright: #f0cd78;
   --gold-dim: #8a6d33;
@@ -74,7 +75,8 @@ body {
 
 .tagline {
   font-size: 12px; letter-spacing: .28em; text-transform: uppercase;
-  color: var(--gold-dim); flex: 1;
+  color: var(--gold-dim); flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .topnav { display: flex; gap: 10px; }
@@ -112,7 +114,7 @@ body {
 .table {
   position: relative; height: 640px; border-radius: 46px;
   background:
-    radial-gradient(75% 75% at 50% 42%, #1c6a4e 0%, var(--felt) 48%, var(--felt-deep) 100%);
+    radial-gradient(75% 75% at 50% 42%, var(--felt-hi) 0%, var(--felt) 48%, var(--felt-deep) 100%);
   box-shadow:
     inset 0 0 90px rgba(0, 0, 0, .55),
     0 24px 60px rgba(0, 0, 0, .55);
@@ -137,7 +139,7 @@ body {
 
 .nameplate {
   display: flex; flex-direction: row; align-items: center; gap: 9px; line-height: 1.15;
-  background: rgba(10, 26, 19, .72); border: 1px solid rgba(212,169,78,.35);
+  background: rgba(12, 12, 10, .62); border: 1px solid rgba(212,169,78,.35);
   border-radius: 12px; padding: 5px 14px 5px 7px; -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
   transition: box-shadow .25s, border-color .25s;
 }
@@ -179,7 +181,7 @@ body {
   position: relative; z-index: 8; max-width: 194px; text-align: center; line-height: 1.35;
   font-family: var(--font-display); font-size: 13.5px; font-style: italic;
   color: var(--gold-bright); text-shadow: 0 1px 5px rgba(0,0,0,.8);
-  background: rgba(8, 22, 16, .92); border: 1px solid rgba(212, 169, 78, .5);
+  background: rgba(16, 12, 9, .9); border: 1px solid rgba(212, 169, 78, .5);
   border-radius: 13px; padding: 4px 13px;
   opacity: 0; transform: translateY(4px); transition: opacity .3s ease, transform .3s ease;
   box-shadow: 0 3px 10px rgba(0,0,0,.45);
@@ -265,16 +267,14 @@ body {
 .card.red { color: var(--red); }
 .card.black { color: var(--ink); }
 
-.card.joker { color: var(--burgundy); }
-.card.joker .pip { font-size: 30px; }
-.card.joker .idx { font-size: 10px; letter-spacing: .08em; writing-mode: vertical-rl; text-orientation: upright; font-weight: 700; }
-.card.joker.big .pip::after { content: "★"; color: var(--gold); font-size: 14px; position: absolute; margin-top: -44px; }
 
 .card.back {
+  /* Maroon back with a gold lattice and the kitty medallion in the middle. */
   background:
-    repeating-linear-gradient(45deg, rgba(212,169,78,.28) 0 2px, transparent 2px 9px),
-    repeating-linear-gradient(-45deg, rgba(212,169,78,.28) 0 2px, transparent 2px 9px),
-    linear-gradient(160deg, #6e2229, var(--burgundy) 65%, #431318);
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Ccircle cx='30' cy='30' r='27.5' fill='%234a1218' stroke='%23d4a94e' stroke-width='2'/%3E%3Ccircle cx='30' cy='30' r='23' fill='none' stroke='%23d4a94e' stroke-opacity='.7' stroke-width='.8' stroke-dasharray='1.4 2.2'/%3E%3Cpath d='M17 25 L18.6 13 L26 19.4 Q30 18.5 34 19.4 L41.4 13 L43 25 Q45.6 30.2 43.4 36.2 Q39.8 44.2 30 44.2 Q20.2 44.2 16.6 36.2 Q14.4 30.2 17 25Z' fill='%23e2bb62'/%3E%3Cellipse cx='24.4' cy='29.6' rx='2.1' ry='3' fill='%234a1218'/%3E%3Cellipse cx='35.6' cy='29.6' rx='2.1' ry='3' fill='%234a1218'/%3E%3Cpath d='M28.2 34.4 H31.8 L30 36.4Z' fill='%234a1218'/%3E%3Cpath d='M30 36.4 Q28.1 38.9 25.9 37.9 M30 36.4 Q31.9 38.9 34.1 37.9 M18.5 33.6 L24 34.4 M18.5 37 L24 36.2 M41.5 33.6 L36 34.4 M41.5 37 L36 36.2' stroke='%234a1218' stroke-width='.9' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") center / 64% auto no-repeat,
+    repeating-linear-gradient(45deg, rgba(212,169,78,.2) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-45deg, rgba(212,169,78,.2) 0 1px, transparent 1px 7px),
+    linear-gradient(160deg, #7a2530, var(--burgundy) 60%, #3a0f15);
   border-color: #2e0d11;
 }
 .card.back::after {
@@ -679,8 +679,6 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
   .card .pip { font-size: 21px; }
   .card .idx { font-size: 12px; top: 3px; left: 4px; }
   .card .idx.flip { bottom: 3px; right: 4px; }
-  .card.joker .pip { font-size: 19px; }
-  .card.joker .idx { font-size: 8px; }
 
   .kitty { top: 50%; }
   .kitty .card { width: 30px; height: 42px; margin: 0 -11px; }
@@ -777,7 +775,6 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
   .card .pip { font-size: 19px; }
   .card .idx { font-size: 11px; top: 3px; left: 4px; }
   .card .idx.flip { bottom: 3px; right: 4px; }
-  .card.joker .idx { font-size: 7px; }
   .kitty { top: 42%; }
   .kitty .card { width: 28px; height: 40px; margin: 0 -10px; }
   .trick .played { top: 44%; }
@@ -854,4 +851,271 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
 #modal-gameover #btn-to-lobby { margin-top: 10px; }
 
 /* narrowest phones: the header goes by its short name, "Da Kitty" */
-@media (max-width: 380px) { .brand-gm { display: none; } .brand { font-size: 22px; } }
+@media (max-width: 400px) { .brand-gm { display: none; } .brand { font-size: 22px; } }
+
+/* =====================================================================
+   TABLE POLISH — jokers, kitty, winning card, banners, nameplates,
+   scoreboard, splash fan, celebrations, felt colors
+   ===================================================================== */
+
+/* ---------- jokers: Big in gold, Little in silver ---------- */
+.card.joker { overflow: hidden; }
+.card.joker.big {
+  background: linear-gradient(155deg, #fff6d6 0%, #f3d27e 45%, #c9973c 100%);
+  border-color: #9c7428; color: #5a3608;
+}
+.card.joker.little {
+  background: linear-gradient(155deg, #ffffff 0%, #e2e5ec 45%, #a9aebd 100%);
+  border-color: #858a9b; color: #31374a;
+}
+.card.joker .idx small { font-family: var(--font-body); font-size: 7.5px; font-weight: 800; letter-spacing: .04em; margin-top: 1px; }
+.card.joker .pip { font-size: calc(var(--card-w) * .44); padding-bottom: 24%; opacity: 1; text-shadow: 0 1px 0 rgba(255,255,255,.6); }
+.card.joker .jlab {
+  position: absolute; left: 0; right: 0; bottom: 16%; text-align: center; line-height: 1.1;
+  font-family: var(--font-body); font-weight: 800; text-transform: uppercase;
+  font-size: max(6.5px, calc(var(--card-w) * .105)); letter-spacing: .06em;
+}
+.card.joker .jlab b {
+  display: block; font-family: var(--font-display); font-style: italic; font-weight: 700;
+  text-transform: none; letter-spacing: 0; font-size: 1.4em;
+}
+/* No-Trump: jokers are dead cards — faded, and labeled throw-off. */
+.card.joker.dead { filter: saturate(.3) brightness(.93); }
+.card.joker.dead .jlab { color: #8b2a22; letter-spacing: .02em; }
+.kitty .card.joker .jlab, .kitty .card.joker .idx.flip { display: none; }
+
+/* ---------- the kitty pile ---------- */
+.kitty.pile { display: block; width: 50px; height: 70px; }
+.kitty.pile::after { content: none; }
+.kitty.pile .card {
+  position: absolute; left: 0; top: 0; width: 50px; height: 70px; margin: 0; border-radius: 6px;
+  transform: translate(calc(var(--i) * 1.3px), calc(var(--i) * -1.5px)) rotate(calc((var(--i) - 3) * 2.4deg));
+}
+.card.kitty-face {
+  background: linear-gradient(160deg, #fffaf0, var(--cream) 60%, #eadfc4);
+  display: grid; place-items: center;
+}
+.kitty-face .kf-cat {
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Samsung Color Emoji", "Twemoji Mozilla", sans-serif;
+  font-size: 27px; line-height: 1; margin-top: -16%;
+}
+.kitty-face .kf-lab {
+  position: absolute; left: 0; right: 0; bottom: 9%; text-align: center;
+  font-family: var(--font-body); font-weight: 800; font-size: 7px; letter-spacing: .22em;
+  text-transform: uppercase; color: var(--burgundy);
+}
+.kitty.taking { transition: transform .62s cubic-bezier(.5, 0, .75, .4), opacity .62s ease-in; opacity: 0; }
+.kitty.taking.to-0 { transform: translate(-50%, 190px) scale(.7) rotate(6deg); }
+.kitty.taking.to-1 { transform: translate(calc(-50% - 300px), -50%) scale(.7) rotate(-12deg); }
+.kitty.taking.to-2 { transform: translate(-50%, calc(-50% - 210px)) scale(.7); }
+.kitty.taking.to-3 { transform: translate(calc(-50% + 300px), -50%) scale(.7) rotate(12deg); }
+
+/* ---------- who's winning the book ---------- */
+.trick .played { z-index: 1; }
+.trick .played .card { transition: box-shadow .25s ease, transform .25s ease; }
+.trick .played.winning { z-index: 3; }
+.trick .played.winning .card {
+  box-shadow: 0 0 0 2px var(--gold-bright), 0 0 22px 5px rgba(240, 205, 120, .5), 0 6px 14px rgba(0, 0, 0, .5);
+}
+.trick.won .played.winning .card { transform: scale(1.08); }
+.trick.won .played:not(.winning) .card { filter: brightness(.75); }
+
+/* ---------- table banner ("Give me da kitty!") ---------- */
+.table-banner {
+  position: absolute; left: 50%; top: 42%; z-index: 12; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  transform: translate(-50%, -50%); opacity: 0; white-space: nowrap; text-align: center;
+}
+.table-banner.show { animation: bannerIn 1.7s cubic-bezier(.2, .9, .3, 1.2) both; }
+.tb-main {
+  font-family: var(--font-display); font-style: italic; font-weight: 800; font-size: 46px; line-height: 1;
+  color: var(--gold-bright);
+  text-shadow: 0 3px 0 #5c1a20, 0 10px 30px rgba(0, 0, 0, .75);
+}
+.tb-sub { font-size: 12px; font-weight: 700; letter-spacing: .3em; text-transform: uppercase; color: var(--cream); text-shadow: 0 2px 8px rgba(0,0,0,.9); }
+@keyframes bannerIn {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.55) rotate(-4deg); }
+  16% { opacity: 1; transform: translate(-50%, -50%) scale(1.06) rotate(-2deg); }
+  26% { transform: translate(-50%, -50%) scale(1) rotate(-2deg); }
+  78% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(-2deg); }
+  100% { opacity: 0; transform: translate(-50%, -70%) scale(.96) rotate(-2deg); }
+}
+
+/* ---------- nameplates: book badges, +1 pops, your own plate ---------- */
+.nameplate { position: relative; }
+.np-books {
+  position: absolute; top: -8px; right: -8px; z-index: 2;
+  min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px;
+  display: none; place-items: center;
+  font-family: var(--font-display); font-weight: 800; font-size: 12.5px; line-height: 1; color: #2c1a06;
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+  border: 1px solid rgba(255, 243, 200, .5); box-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+}
+.np-books.show { display: grid; }
+.np-books.bump { animation: bump .45s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes bump { 0% { transform: scale(.4); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
+.book-pop {
+  position: absolute; left: 50%; top: -24px; z-index: 20; pointer-events: none; white-space: nowrap;
+  font-family: var(--font-display); font-style: italic; font-weight: 700; font-size: 16px;
+  color: var(--gold-bright); text-shadow: 0 2px 8px rgba(0, 0, 0, .9);
+  animation: popUp 1.2s ease-out both;
+}
+@keyframes popUp {
+  0% { opacity: 0; transform: translate(-50%, 10px) scale(.7); }
+  20% { opacity: 1; transform: translate(-50%, -6px) scale(1.05); }
+  100% { opacity: 0; transform: translate(-50%, -40px); }
+}
+.nameplate.you { cursor: pointer; }
+@media (hover: hover) and (pointer: fine) {
+  .nameplate.you:hover { border-color: var(--gold-bright); }
+}
+.nameplate.you:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+
+/* Bigger seats on tablets / laptops — the felt has the room. */
+@media (min-width: 761px) and (min-height: 501px) {
+  .seat-north, .seat-west, .seat-east { width: 236px; }
+  .seat:not(.seat-south) .nameplate { padding: 7px 18px 7px 8px; gap: 11px; border-radius: 14px; }
+  .seat:not(.seat-south) .nameplate .avatar { width: 44px; height: 44px; font-size: 25px; }
+  .seat:not(.seat-south) .nameplate .pname { font-size: 19px; }
+  .seat:not(.seat-south) .nameplate .prole { font-size: 10.5px; }
+  .bid-chip { font-size: 14.5px; max-width: 230px; }
+  .action-bar { gap: 22px; }
+}
+
+/* ---------- scoreboard (score + this hand in one panel) ---------- */
+.sb-head, .sb-team {
+  display: grid; grid-template-columns: minmax(0, 1fr) 52px 56px; align-items: baseline; column-gap: 8px;
+}
+.sb-head span { font-size: 9.5px; letter-spacing: .22em; text-transform: uppercase; color: var(--gold-dim); text-align: center; }
+.sb-team { padding: 8px 0 10px; border-top: 1px solid rgba(212, 169, 78, .15); }
+.sb-name { font-family: var(--font-display); font-size: 17px; color: var(--cream); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-books { font-family: var(--font-display); font-size: 20px; font-weight: 600; color: var(--cream-dim); text-align: center; }
+.sb-pts { font-family: var(--font-display); font-size: 32px; font-weight: 700; color: var(--cream); text-align: center; line-height: 1; }
+.sb-team.us .sb-name, .sb-team.us .sb-pts { color: var(--gold-bright); }
+.sb-bar { grid-column: 1 / -1; height: 5px; margin-top: 8px; border-radius: 3px; background: rgba(0, 0, 0, .35); overflow: hidden; }
+.sb-bar i { display: block; height: 100%; width: 0; border-radius: 3px; background: linear-gradient(90deg, var(--gold-dim), var(--gold-bright)); transition: width .6s ease; }
+.sb-team.them .sb-bar i { background: linear-gradient(90deg, #6f6c86, #b9b6d6); }
+.sb-bar i.neg, .sb-team.them .sb-bar i.neg { background: linear-gradient(90deg, #7a2a22, var(--bad)); }
+.sb-hand { border-top: 1px solid rgba(212, 169, 78, .15); padding-top: 10px; }
+
+/* ---------- splash: a fan of cards, kitty on top ---------- */
+.splash-fan { position: relative; height: 96px; width: 220px; margin: -8px auto 12px; }
+.splash-fan .card {
+  position: absolute; left: 50%; bottom: 0; width: 56px; height: 78px; margin-left: -28px;
+  transform-origin: 50% 135%; transform: rotate(var(--r));
+  animation: fanOut .7s cubic-bezier(.2, .9, .3, 1.1) both;
+}
+.splash-fan .card:nth-child(1) { --r: -27deg; animation-delay: .05s; }
+.splash-fan .card:nth-child(2) { --r: -9deg; animation-delay: .12s; }
+.splash-fan .card:nth-child(3) { --r: 9deg; animation-delay: .19s; }
+.splash-fan .card:nth-child(4) { --r: 27deg; animation-delay: .26s; }
+.splash-fan .card .idx { font-size: 14px; }
+.splash-fan .card .pip { font-size: 26px; }
+.splash-fan .kitty-face .kf-cat { font-size: 30px; }
+.splash-fan .kitty-face .kf-lab { font-size: 7.5px; }
+@keyframes fanOut { from { opacity: 0; transform: rotate(0deg) translateY(12px); } to { opacity: 1; transform: rotate(var(--r)); } }
+
+/* ---------- celebrations ---------- */
+.modal.celebrate { position: relative; overflow: hidden; }
+.modal.celebrate > :not(.burst) { position: relative; }
+.burst {
+  display: none; position: absolute; left: 50%; top: 40px; width: 360px; height: 360px;
+  margin: -180px 0 0 -180px; border-radius: 50%; pointer-events: none;
+  background: repeating-conic-gradient(from 0deg, rgba(240, 205, 120, .3) 0deg 7deg, transparent 7deg 20deg);
+  -webkit-mask: radial-gradient(circle, #000 12%, transparent 68%);
+  mask: radial-gradient(circle, #000 12%, transparent 68%);
+  animation: spin 16s linear infinite;
+}
+.modal.boston .burst, #modal-gameover .modal.is-made .burst { display: block; }
+.modal.boston .stamp { color: var(--gold-bright); font-size: 30px; text-shadow: 0 0 18px rgba(240, 205, 120, .55); }
+.stamp.slam { animation: slam .55s cubic-bezier(.2, 1.4, .4, 1) both; }
+@keyframes slam {
+  0% { opacity: 0; transform: scale(2.6) rotate(-14deg); }
+  60% { opacity: 1; transform: scale(.94) rotate(-3deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-4deg); }
+}
+.modal.shake { animation: modalIn .35s cubic-bezier(.2, .9, .3, 1.15) both, shake .45s .4s ease both; }
+@keyframes shake {
+  0%, 100% { translate: 0 0; } 20% { translate: -9px 0; } 40% { translate: 8px 0; }
+  60% { translate: -5px 0; } 80% { translate: 3px 0; }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.confetti { position: fixed; inset: 0; z-index: 90; pointer-events: none; overflow: hidden; }
+.confetti i {
+  position: absolute; top: -16px; width: 8px; height: 13px; border-radius: 2px;
+  animation: fall 3s cubic-bezier(.25, .6, .5, 1) forwards;
+}
+@keyframes fall {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translate(var(--dx), 105vh) rotate(var(--rot)); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .burst, .stamp.slam, .modal.shake, .splash-fan .card, .np-books.bump, .book-pop { animation: none; }
+  .table-banner.show { animation-duration: .01s; opacity: 1; }
+}
+
+/* ---------- felt colors (Table Rules → Look & sound) ---------- */
+:root[data-felt="burgundy"] { --felt-hi: #7c2a35; --felt: #5a1b25; --felt-deep: #2a0a10; }
+:root[data-felt="midnight"] { --felt-hi: #24467a; --felt: #172f57; --felt-deep: #091327; }
+:root[data-felt="purple"]   { --felt-hi: #5f2d80; --felt: #452062; --felt-deep: #1d0b2b; }
+.settings-sub { font-family: var(--font-display); font-size: 15px; font-weight: 600; color: var(--gold-bright); text-align: left; margin: -4px 0 10px; }
+.felt-picks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.felt-pick {
+  display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 10px; cursor: pointer;
+  background: rgba(0, 0, 0, .25); border: 1px solid rgba(212, 169, 78, .25);
+  color: var(--cream-dim); font-family: var(--font-body); font-size: 12.5px; text-align: left;
+}
+.felt-pick i { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(212, 169, 78, .55); }
+.felt-pick[data-felt="green"] i { background: radial-gradient(circle at 40% 35%, #1c6a4e, #0a2e21); }
+.felt-pick[data-felt="burgundy"] i { background: radial-gradient(circle at 40% 35%, #7c2a35, #2a0a10); }
+.felt-pick[data-felt="midnight"] i { background: radial-gradient(circle at 40% 35%, #24467a, #091327); }
+.felt-pick[data-felt="purple"] i { background: radial-gradient(circle at 40% 35%, #5f2d80, #1d0b2b); }
+.felt-pick.on { border-color: var(--gold-bright); color: var(--cream); box-shadow: 0 0 0 1px var(--gold-bright) inset; }
+.pref-sound { margin: 0 0 20px; text-align: left; }
+
+/* ---------- header with the sound toggle ---------- */
+@media (min-width: 601px) and (max-width: 1240px) { .tagline { display: none; } }
+@media (min-width: 761px) and (max-width: 1000px) {
+  .topbar { flex-wrap: wrap; row-gap: 10px; }
+  .brand { flex: 1; }
+}
+
+/* ---------- phones (portrait) ---------- */
+@media (max-width: 600px) {
+  .kitty.pile, .kitty.pile .card { width: 36px; height: 50px; }
+  .kitty-face .kf-cat { font-size: 19px; }
+  .kitty-face .kf-lab { font-size: 5.5px; letter-spacing: .16em; }
+  .kitty.taking.to-0 { transform: translate(-50%, 140px) scale(.7); }
+  .kitty.taking.to-1 { transform: translate(calc(-50% - 110px), calc(-50% - 170px)) scale(.6) rotate(-12deg); }
+  .kitty.taking.to-2 { transform: translate(-50%, calc(-50% - 170px)) scale(.6); }
+  .kitty.taking.to-3 { transform: translate(calc(-50% + 110px), calc(-50% - 170px)) scale(.6) rotate(12deg); }
+  .tb-main { font-size: 30px; }
+  .tb-sub { font-size: 10px; }
+  .np-books { top: -6px; right: -3px; min-width: 18px; height: 18px; font-size: 11px; padding: 0 4px; }
+  .book-pop { font-size: 13px; }
+  .sb-pts { font-size: 28px; }
+  .splash-fan { height: 82px; margin-bottom: 8px; }
+  .splash-fan .card { width: 48px; height: 67px; margin-left: -24px; }
+  .splash-fan .card .idx { font-size: 12px; }
+  .splash-fan .card .pip { font-size: 22px; }
+  .splash-fan .kitty-face .kf-cat { font-size: 25px; }
+  .splash-fan .kitty-face .kf-lab { font-size: 6.5px; }
+  .felt-picks { grid-template-columns: 1fr; }
+  .burst { width: 300px; height: 300px; margin: -150px 0 0 -150px; }
+  .card.joker .idx small { font-size: 6.5px; }
+}
+
+/* ---------- phones held sideways ---------- */
+@media (orientation: landscape) and (max-height: 500px) {
+  .kitty.pile, .kitty.pile .card { width: 32px; height: 45px; }
+  .kitty-face .kf-cat { font-size: 17px; }
+  .kitty-face .kf-lab { display: none; }
+  .tb-main { font-size: 26px; }
+  .splash-fan { display: none; }
+  .np-books { top: -6px; right: -6px; min-width: 17px; height: 17px; font-size: 10.5px; padding: 0 4px; }
+  .kitty.taking.to-1 { transform: translate(calc(-50% - 200px), -50%) scale(.6); }
+  .kitty.taking.to-2 { transform: translate(-50%, calc(-50% - 120px)) scale(.6); }
+  .kitty.taking.to-3 { transform: translate(calc(-50% + 200px), -50%) scale(.6); }
+  .kitty.taking.to-0 { transform: translate(-50%, 110px) scale(.6); }
+}

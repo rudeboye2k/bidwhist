@@ -172,7 +172,124 @@
     net: null,                   // Net controller (online)
     profile: loadProfile(),      // { name, avatar } saved locally
     handResult: null,            // { highSeat, made, delta } shown on the seat
+    liveTrick: [],               // cards on the felt right now (winning-card glow)
+    seatBooks: [0, 0, 0, 0],     // books each player has taken this hand
   };
+
+  // ---- sound, vibration & table effects -----------------------------------
+  // Every sound is synthesized with Web Audio (no files to download). Off
+  // switch lives in the menu and in Table Rules; it also silences vibration.
+  const Sound = (() => {
+    let ctx = null;
+    let on = true;
+    try { on = localStorage.getItem('bidwhist.sound') !== 'off'; } catch (_) { /* default on */ }
+    function ac() {
+      if (!on) return null;
+      if (!ctx) {
+        const C = window.AudioContext || window.webkitAudioContext;
+        if (!C) return null;
+        try { ctx = new C(); } catch (_) { return null; }
+      }
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      return ctx;
+    }
+    function out(c, node, gain) {
+      const g = c.createGain(); g.gain.value = gain;
+      node.connect(g); g.connect(c.destination);
+      return g;
+    }
+    // A short filtered noise burst — card snaps, shuffles, swishes.
+    function noise(dur, freq, q, gain, when) {
+      const c = ac(); if (!c) return;
+      const t = c.currentTime + (when || 0);
+      const len = Math.max(1, Math.ceil(c.sampleRate * dur));
+      const buf = c.createBuffer(1, len, c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+      const src = c.createBufferSource(); src.buffer = buf;
+      const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+      src.connect(f); out(c, f, gain);
+      src.start(t);
+    }
+    function tone(freq, dur, gain, when, type) {
+      const c = ac(); if (!c) return;
+      const t = c.currentTime + (when || 0);
+      const o = c.createOscillator(); o.type = type || 'sine'; o.frequency.value = freq;
+      const g = c.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(gain, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(c.destination);
+      o.start(t); o.stop(t + dur + 0.05);
+    }
+    const fx = {
+      card: () => noise(0.06, 2600, 1.1, 0.55),
+      collect: () => noise(0.24, 800, 0.6, 0.3),
+      shuffle: () => { for (let i = 0; i < 10; i++) noise(0.05, 1800 + Math.random() * 1400, 1, 0.32, i * 0.055); },
+      turn: () => tone(880, 0.12, 0.05),
+      kitty: () => { tone(659.25, 0.18, 0.1); tone(987.77, 0.3, 0.1, 0.11); },
+      made: () => { tone(523.25, 0.3, 0.1, 0, 'triangle'); tone(783.99, 0.4, 0.1, 0.1, 'triangle'); },
+      chime: () => [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => tone(f, 0.6, 0.11, i * 0.1, 'triangle')),
+      set: () => { tone(220, 0.35, 0.12, 0, 'triangle'); tone(164.8, 0.55, 0.12, 0.16, 'triangle'); },
+    };
+    return {
+      play(name) { try { if (fx[name]) fx[name](); } catch (_) { /* audio is optional */ } },
+      buzz(pattern) { try { if (on && navigator.vibrate) navigator.vibrate(pattern); } catch (_) { /* ignore */ } },
+      get on() { return on; },
+      set(v) {
+        on = !!v;
+        try { localStorage.setItem('bidwhist.sound', on ? 'on' : 'off'); } catch (_) { /* ignore */ }
+        if (on) ac();
+      },
+    };
+  })();
+
+  const reduceMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Big italic call-out across the felt ("Give me da kitty!").
+  let bannerTimer = null;
+  function showBanner(text, sub, ms) {
+    const b = $('table-banner'); if (!b) return;
+    b.innerHTML = `<span class="tb-main">${text}</span>` + (sub ? `<span class="tb-sub">${sub}</span>` : '');
+    b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => b.classList.remove('show'), ms || 1500);
+  }
+
+  function confetti(n) {
+    if (reduceMotion()) return;
+    const box = document.createElement('div');
+    box.className = 'confetti'; box.setAttribute('aria-hidden', 'true');
+    const colors = ['#f0cd78', '#d4a94e', '#f6efdd', '#e0705f', '#7fc97f', '#b3382e'];
+    for (let i = 0; i < (n || 90); i++) {
+      const p = document.createElement('i');
+      p.style.left = (Math.random() * 100) + '%';
+      p.style.background = colors[i % colors.length];
+      p.style.setProperty('--dx', (Math.random() * 160 - 80) + 'px');
+      p.style.setProperty('--rot', (Math.random() * 900 - 450) + 'deg');
+      p.style.animationDuration = (2.2 + Math.random() * 1.8) + 's';
+      p.style.animationDelay = (Math.random() * 0.5) + 's';
+      if (i % 3 === 0) p.style.borderRadius = '50%';
+      box.appendChild(p);
+    }
+    document.body.appendChild(box);
+    setTimeout(() => box.remove(), 4800);
+  }
+
+  // Re-trigger a CSS entrance animation (stamps slamming down, shakes).
+  function replay(el, cls) { if (!el) return; el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+
+  // Dress the hand-summary / game-over dialog for the moment.
+  function celebrate(modalId, kind, ours) {
+    const m = document.querySelector('#' + modalId + ' .modal');
+    m.classList.remove('boston', 'is-set', 'is-made', 'shake');
+    m.classList.add(kind === 'boston' ? 'boston' : kind === 'set' ? 'is-set' : 'is-made');
+    replay(m.querySelector('.stamp'), 'slam');
+    if (kind === 'set') { replay(m, 'shake'); Sound.play('set'); Sound.buzz(ours ? 60 : 20); }
+    else if (kind === 'boston') { Sound.play('chime'); Sound.buzz([30, 50, 30, 50, 60]); if (ours) confetti(110); }
+    else if (kind === 'win') { Sound.play('chime'); Sound.buzz([30, 50, 30]); confetti(130); }
+    else Sound.play('made');
+  }
 
   // ---- logging & messages ---------------------------------------------------
 
@@ -208,9 +325,16 @@
     const el = document.createElement('div');
     if (!faceUp) { el.className = 'card back'; return el; }
     if (card.joker) {
-      el.className = 'card joker' + (card.joker === 'big' ? ' big' : '');
-      el.innerHTML = '<span class="idx">JOKER</span><span class="pip">🃏</span>';
-      el.title = E.cardLabel(card);
+      // Big Joker in gold, Little Joker in silver. In No-Trump they're dead
+      // cards, and the face says so.
+      const big = card.joker === 'big';
+      const dead = !!(G.contract && G.contract.type === 'notrump');
+      el.className = 'card joker ' + (big ? 'big' : 'little') + (dead ? ' dead' : '');
+      el.innerHTML =
+        `<span class="idx">&#9733;<small>${big ? 'BIG' : 'LIL'}</small></span><span class="pip">&#9733;</span>` +
+        `<span class="jlab"><b>${big ? 'Big' : 'Little'}</b>${dead ? 'throw-off' : 'joker'}</span>` +
+        `<span class="idx flip">&#9733;<small>${big ? 'BIG' : 'LIL'}</small></span>`;
+      el.title = E.cardLabel(card) + (dead ? ' — dead in No-Trump' : '');
       return el;
     }
     const red = card.suit === 'H' || card.suit === 'D';
@@ -241,9 +365,16 @@
     $('books-them').textContent = G.books[them];
     $('mini-us').textContent = G.scores[us];     // compact header score (phones)
     $('mini-them').textContent = G.scores[them];
-    for (const [id, t] of [['label-us', us], ['label-them', them], ['books-label-us', us],
-      ['books-label-them', them], ['mini-label-us', us], ['mini-label-them', them]]) {
+    for (const [id, t] of [['label-us', us], ['label-them', them],
+      ['mini-label-us', us], ['mini-label-them', them]]) {
       const el = $(id); if (el) { el.textContent = teamLabel(t); el.title = teamLabel(t); }
+    }
+    // Progress toward the game target (red when a team is in the hole).
+    for (const [id, t] of [['bar-us', us], ['bar-them', them]]) {
+      const el = $(id); if (!el) continue;
+      const sc = G.scores[t], target = G.rules.gameTarget || 7;
+      el.style.width = Math.min(100, Math.abs(sc) / target * 100) + '%';
+      el.classList.toggle('neg', sc < 0);
     }
   }
 
@@ -287,14 +418,37 @@
     for (const p of [1, 2, 3]) { const box = $('opp-hand-' + p); if (box) box.innerHTML = ''; }
   }
 
+  // The kitty: a squared-up pile of six with the kitty card on top — or, when
+  // sported, the six cards face up for the whole table.
   function renderKitty(state) {
     const k = $('kitty');
     k.innerHTML = '';
-    k.classList.remove('gone', 'sported');
+    k.className = 'kitty';
     if (state === 'gone') { k.classList.add('gone'); return; }
-    const faceUp = state === 'sported';
-    if (faceUp) k.classList.add('sported');
-    for (const card of G.kitty) k.appendChild(cardEl(card, faceUp));
+    if (state === 'sported') {
+      k.classList.add('sported');
+      for (const card of G.kitty) k.appendChild(cardEl(card, true));
+      return;
+    }
+    k.classList.add('pile');
+    for (let i = 0; i < 5; i++) {
+      const c = cardEl(null, false); c.style.setProperty('--i', i); k.appendChild(c);
+    }
+    const top = document.createElement('div');
+    top.className = 'card kitty-face'; top.style.setProperty('--i', 5);
+    top.innerHTML = '<span class="kf-cat">🐱</span><span class="kf-lab">kitty</span>';
+    k.appendChild(top);
+  }
+
+  // The high bidder hollers for it and the pile slides over to their seat.
+  async function kittyToSeat(seat) {
+    const k = $('kitty');
+    if (!k || k.classList.contains('gone')) return;
+    showBanner('Give me da kitty!', seat === G.viewSeat ? '' : '&mdash; ' + seatName(seat), 1700);
+    Sound.play('kitty');
+    await wait(160);
+    k.classList.add('taking', 'to-' + slot(seat));
+    await wait(1100);
   }
 
   function renderSeatsMeta(turnSeat) {
@@ -316,9 +470,11 @@
       applyAvatar(plate.querySelector('.avatar'), avatarSpecFor(seat));
       const nameEl = plate.querySelector('.pname');
       const roleEl = plate.querySelector('.prole');
-      if (nameEl) nameEl.textContent = seatName(seat);
+      const mine = seat === G.viewSeat;
+      const myName = mine ? ownName() : null;
+      if (nameEl) nameEl.textContent = mine ? myName : seatName(seat);
       if (roleEl) {
-        let role = seat === G.viewSeat ? 'you'
+        let role = mine ? (myName === 'You' ? 'add your name' : 'you')
           : seat === (G.viewSeat + 2) % 4 ? 'your partner' : SLOT_ROLE[slot(seat)];
         if (G.mode === 'online' && G.view && G.view.seats) {
           const s = G.view.seats[seat];
@@ -329,6 +485,38 @@
       }
       plate.classList.toggle('you', seat === G.viewSeat);
     }
+    renderPlateBooks();
+  }
+
+  // Your own name, as the table sees it (online: what the server has).
+  function ownName() {
+    if (G.mode === 'online' && G.view && G.view.seats && G.view.seats[G.viewSeat])
+      return G.view.seats[G.viewSeat].name || G.profile.name;
+    return G.profile.name || 'You';
+  }
+
+  // Gold badge on each nameplate: books that player has taken this hand.
+  function renderPlateBooks(bumpSeat) {
+    for (let seat = 0; seat < 4; seat++) {
+      const plate = $('plate-' + slot(seat));
+      const b = plate && plate.querySelector('.np-books');
+      if (!b) continue;
+      const n = G.contract ? (G.seatBooks[seat] || 0) : 0;
+      b.textContent = n ? String(n) : '';
+      b.title = n ? `${n} book${n > 1 ? 's' : ''} this hand` : '';
+      b.classList.toggle('show', n > 0);
+      if (seat === bumpSeat && n) replay(b, 'bump');
+    }
+  }
+
+  // "+1" floats up off the seat that took the book.
+  function bookPop(seat) {
+    const el = $('seat-' + slot(seat));
+    if (!el) return;
+    const p = document.createElement('span');
+    p.className = 'book-pop'; p.textContent = '+1 book';
+    el.appendChild(p);
+    setTimeout(() => p.remove(), 1300);
   }
 
   // Colored suit glyph + name, e.g. ♥ Hearts (red) / ♠ Spades.
@@ -432,16 +620,39 @@
   function addPlayedCard(seat, card) {
     const wrap = document.createElement('div');
     wrap.className = 'played from-' + slot(seat);
+    wrap.dataset.seat = String(seat);
     wrap.appendChild(cardEl(card, true));
     $('trick').appendChild(wrap);
+    G.liveTrick.push({ player: seat, card });
+    markWinning();
+    Sound.play('card');
+  }
+
+  // Glow on whichever card is taking the book right now.
+  function markWinning() {
+    if (!G.contract || !G.liveTrick.length) return;
+    const w = E.trickWinner(G.liveTrick, G.contract);
+    for (const el of $('trick').querySelectorAll('.played'))
+      el.classList.toggle('winning', el.dataset.seat === String(w));
+  }
+
+  function clearTrick() {
+    const t = $('trick');
+    t.className = 'trick'; t.innerHTML = '';
+    G.liveTrick = [];
   }
 
   async function collectTrick(winnerSeat) {
     const t = $('trick');
+    t.classList.add('won');
+    await wait(260);
     t.classList.add('collect', 'to-' + slot(winnerSeat));
+    Sound.play('collect');
+    G.seatBooks[winnerSeat] = (G.seatBooks[winnerSeat] || 0) + 1;
+    bookPop(winnerSeat);
+    renderPlateBooks(winnerSeat);
     await wait(520);
-    t.className = 'trick';
-    t.innerHTML = '';
+    clearTrick();
   }
 
   // ---- action bar -----------------------------------------------------------
@@ -608,7 +819,9 @@
     G.memory = new Set();
     G.discardPicks = new Set();
     G.handResult = null;
-    $('trick').innerHTML = '';
+    G.seatBooks = [0, 0, 0, 0];
+    clearTrick();
+    Sound.play('shuffle');
 
     const dealt = E.deal(E.shuffle(E.newDeck()));
     G.hands = dealt.hands; G.kitty = dealt.kitty;
@@ -632,6 +845,7 @@
       let bid;
       if (seat === 0) {
         showBidPanel(mustBid);
+        Sound.play('turn'); Sound.buzz(12);
         tableMsg(mustBid ? 'The table passed it to you, dealer.' : 'Your call.');
         bid = await humanInput('bid');
         tableMsg('');
@@ -703,6 +917,8 @@
     }
     if (G.rules.kittyIsBook) G.books[seat % 2]++;
 
+    if (!G.rules.sportKitty) await kittyToSeat(seat);
+    else showBanner('Give me da kitty!', seat === 0 ? '' : '&mdash; ' + seatName(seat), 1500);
     G.hands[seat] = G.hands[seat].concat(G.kitty);
     renderKitty('gone');
 
@@ -740,6 +956,7 @@
           G.legalIds = new Set(legal.map((c) => c.id));
           G.awaiting = 'play'; // before render so illegal cards dim
           renderHand();
+          Sound.play('turn'); Sound.buzz(12);
           actionHint(trick.length === 0 ? 'You lead — pick a card.' + (G.contract.type === 'notrump' && G.hands[0].some((c) => c.joker) && legal.length < G.hands[0].length ? ' (Jokers are throw-offs in No-Trump — no leading them.)' : '') : 'Your play.');
           card = await humanInput('play');
           G.legalIds = new Set();
@@ -810,6 +1027,7 @@
     await wait(400);
     if (winner !== null) return endGame(winner);
     $('modal-summary').classList.add('show');
+    celebrate('modal-summary', !res.made ? 'set' : boston ? 'boston' : 'made', bidTeam === myTeam());
   }
 
   function endGame(winner) {
@@ -823,6 +1041,7 @@
       `Final score: Us <b>${G.scores[0]}</b> · Them <b>${G.scores[1]}</b> after ${G.handNo} hand${G.handNo > 1 ? 's' : ''}.`;
     log(winner === 0 ? '<b>Game — Us.</b>' : '<b>Game — Them.</b>', true);
     $('modal-gameover').classList.add('show');
+    celebrate('modal-gameover', winner === 0 ? 'win' : 'set', true);
   }
 
   function newGame() {
@@ -996,7 +1215,9 @@
           G.bids = [null, null, null, null];
           G.handResult = null;
           G.dealer = ev.dealer; G.handNo = ev.handNo;
-          $('trick').innerHTML = '';
+          G.seatBooks = [0, 0, 0, 0]; G.contract = null;
+          clearTrick(); renderPlateBooks();
+          Sound.play('shuffle');
           $('modal-summary').classList.remove('show');
           $('modal-gameover').classList.remove('show');
           tableMsg('');
@@ -1029,6 +1250,9 @@
             G.kitty = ev.cards; renderKitty('sported');
             tableMsg(`${seatName(ev.seat)} sports the kitty.`);
             await wait(1800); tableMsg('');
+            showBanner('Give me da kitty!', ev.seat === G.viewSeat ? '' : '&mdash; ' + seatName(ev.seat), 1500);
+          } else {
+            await kittyToSeat(ev.seat);
           }
           renderKitty('gone');
           break;
@@ -1075,6 +1299,7 @@
     if (view.rules) G.rules = Object.assign({}, G.rules, view.rules);
     G.scores = view.scores.slice();
     G.books = view.books.slice();
+    if (view.seatBooks) G.seatBooks = view.seatBooks.slice();
     G.handNo = view.handNo;
     G.dealer = view.dealer;
     G.highSeat = view.high ? view.high.seat : null;
@@ -1092,7 +1317,7 @@
     if (view.phase === 'lobby') {
       $('modal-summary').classList.remove('show');
       $('modal-gameover').classList.remove('show');
-      $('trick').innerHTML = '';
+      clearTrick();
       G.handResult = null; G.contract = null;
       showLobby(view); return;
     }
@@ -1103,7 +1328,8 @@
 
     renderScores(); renderContractLine(); renderPlates();
     renderOppHands(); renderBidChips(); renderSeatsMeta(view.turn);
-    renderKitty(view.phase === 'bidding' ? 'back' : 'gone');
+    // The pile stays on the felt until the high bidder actually takes it.
+    renderKitty(view.phase === 'bidding' || view.phase === 'declare' ? 'back' : 'gone');
     renderHand();
     setupTurn(view);
   }
@@ -1119,6 +1345,10 @@
       return;
     }
     G._sent = false;
+    if (Online.lastCue !== view.need + ':' + view.handNo + ':' + (view.counts || []).join(',')) {
+      Online.lastCue = view.need + ':' + view.handNo + ':' + (view.counts || []).join(',');
+      if (view.need === 'bid' || view.need === 'play') { Sound.play('turn'); Sound.buzz(12); }
+    }
     const send = (intent) => {
       if (G._sent) return;
       G._sent = true; G.resolve = null; G.awaiting = null; G.legalIds = new Set();
@@ -1285,7 +1515,9 @@
     const btn = $('btn-next-hand');
     btn.textContent = amHost() ? 'Deal Next Hand' : 'Waiting for host…';
     btn.disabled = !amHost();
+    const wasOpen = $('modal-summary').classList.contains('show');
     $('modal-summary').classList.add('show');
+    if (!wasOpen) celebrate('modal-summary', !r.made ? 'set' : r.boston ? 'boston' : 'made', bidTeam === myTeam());
   }
 
   function showOnlineGameover(winner, scores) {
@@ -1300,7 +1532,9 @@
     btn.textContent = amHost() ? 'Run It Back' : 'Waiting for host…';
     btn.disabled = !amHost();
     $('btn-to-lobby').hidden = !amHost();
+    const wasOpen = $('modal-gameover').classList.contains('show');
     $('modal-gameover').classList.add('show');
+    if (!wasOpen) celebrate('modal-gameover', iWon ? 'win' : 'set', true);
   }
 
   // ---- profile editor -------------------------------------------------------
@@ -1429,7 +1663,40 @@
     connectRoom(Online.base, Online.code, Online.isHost);
   });
   $('btn-quit-online').addEventListener('click', () => location.reload());
-  $('btn-settings').addEventListener('click', () => { settingsToForm(); $('modal-settings').classList.add('show'); });
+  $('btn-settings').addEventListener('click', () => { settingsToForm(); renderPrefs(); $('modal-settings').classList.add('show'); });
+
+  // Look & sound — personal preferences, applied instantly (not table rules).
+  const FELTS = ['green', 'burgundy', 'midnight', 'purple'];
+  function currentFelt() {
+    const f = document.documentElement.getAttribute('data-felt');
+    return FELTS.includes(f) ? f : 'green';
+  }
+  function setFelt(f) {
+    if (!FELTS.includes(f)) f = 'green';
+    document.documentElement.setAttribute('data-felt', f);
+    try { localStorage.setItem('bidwhist.felt', f); } catch (_) { /* ignore */ }
+    renderPrefs();
+  }
+  function renderPrefs() {
+    const f = currentFelt();
+    for (const b of document.querySelectorAll('.felt-pick')) {
+      const on = b.dataset.felt === f;
+      b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
+    }
+    $('pref-sound').checked = Sound.on;
+    const sb = $('btn-sound');
+    sb.textContent = Sound.on ? 'Sound On' : 'Sound Off';
+    sb.setAttribute('aria-pressed', String(Sound.on));
+  }
+  for (const b of document.querySelectorAll('.felt-pick')) b.addEventListener('click', () => setFelt(b.dataset.felt));
+  $('pref-sound').addEventListener('change', (e) => { Sound.set(e.target.checked); renderPrefs(); if (Sound.on) Sound.play('card'); });
+  $('btn-sound').addEventListener('click', () => { Sound.set(!Sound.on); renderPrefs(); if (Sound.on) Sound.play('card'); });
+  renderPrefs();
+
+  // Your own nameplate opens the profile editor.
+  const ownPlate = $('plate-0');
+  ownPlate.addEventListener('click', () => { if (!$('splash').classList.contains('show')) openProfileEditor(); });
+  ownPlate.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProfileEditor(); } });
   $('btn-settings-done').addEventListener('click', () => { formToSettings(); $('modal-settings').classList.remove('show'); });
 
   // Profile editor wiring.

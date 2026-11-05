@@ -20,6 +20,13 @@ online play is powered by a small Cloudflare Worker.
   sees each other's.
 - **Live at [givemedakitty.com](https://givemedakitty.com)** (and `www.`), as well
   as the original `bidwhist.<subdomain>.workers.dev` address.
+- **The table:** gold Big Joker and silver Little Joker (marked *throw-off*
+  in No-Trump), maroon card backs with the kitty medallion, a kitty pile that
+  slides to the high bidder ("Give me da kitty!"), a glow on whichever card is
+  winning the book, book counts on every nameplate, and a Boston / game-win
+  celebration. **Table Rules → Look & sound** picks the felt (green, burgundy,
+  midnight blue, rent-party purple) and turns sound effects & vibration on or
+  off (also in the menu). Sounds are synthesized in the browser — no files.
 - **Branding:** page title, link-preview card (`img/og-card.png`, shown when
   the link is texted or posted), and home-screen icons (`img/`,
   `manifest.webmanifest` — saved to a phone it's called **Da Kitty**).

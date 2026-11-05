@@ -263,6 +263,7 @@
       this.high = null; this.highSeat = null; this.plans = {};
       this.contract = null;
       this.books = [0, 0];
+      this.seatBooks = [0, 0, 0, 0]; // books each player took this hand (nameplates)
       this.trick = [];
       this.leader = null;
       this.turn = null;
@@ -441,6 +442,8 @@
     _finishTrick(events) {
       const winner = E.trickWinner(this.trick, this.contract);
       this.books[winner % 2]++;
+      if (!this.seatBooks) this.seatBooks = [0, 0, 0, 0];
+      this.seatBooks[winner]++;
       events.push({ t: 'trick', winner, cards: this.trick.slice() });
       this.trick = [];
       const handDone = this.hands.every((h) => h.length === 0);
@@ -530,6 +533,7 @@
         })),
         scores: this.scores.slice(),
         books: this.books.slice(),
+        seatBooks: (this.seatBooks || [0, 0, 0, 0]).slice(),
         contract: this.contract,
         high: this.high ? { amount: this.high.amount, type: this.high.type, seat: this.highSeat } : null,
         bids: this.bids.map((b) => (b ? (b.pass ? { pass: true } : { amount: b.amount, type: b.type }) : null)),
