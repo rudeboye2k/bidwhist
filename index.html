@@ -33,7 +33,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Libre+Franklin:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=7">
+<link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
 <div class="room" id="app">
@@ -277,8 +277,8 @@
         <p><b>The kitty.</b> The high bidder names trump (or picks high/low for No-Trump), takes all
           six kitty cards, and buries six — and that buried book belongs to the bidding team.</p>
         <p><b>The play.</b> The bidder leads. Follow suit if you can; the jokers are the two biggest
-          trumps. In No-Trump the jokers are dead cards — they can never win a book and only fall
-          when you&rsquo;re out of the led suit.</p>
+          trumps. In No-Trump the jokers are throw-offs — they can never win a book, you can&rsquo;t
+          lead one, and you only play one when you&rsquo;re out of the led suit.</p>
         <p><b>The score.</b> Make the bid and the bidding team scores <i>every</i> book past six.
           Get set and you lose the bid instead. No-Trump doubles it, up or down. Defenders set a bid
           by winning <b>8 &minus; bid</b> books: four books stops a 4-bid, three stops a 5. Taking
@@ -300,16 +300,16 @@
   </div>
 </div>
 
-<script src="js/engine.js?v=7"></script>
-<script src="js/ai.js?v=7"></script>
+<script src="js/engine.js?v=8"></script>
+<script src="js/ai.js?v=8"></script>
 <script>
   // The site and the game server are one Cloudflare Worker, so the server is
   // simply this page's own address — nothing to configure. Only if you host the
   // page somewhere else (e.g. GitHub Pages) would you point it at the Worker:
   // window.BIDWHIST_SERVER = "https://bidwhist.<your-subdomain>.workers.dev";
 </script>
-<script src="js/qrcode.js?v=7"></script>
-<script src="js/net.js?v=7"></script>
-<script src="js/app.js?v=7"></script>
+<script src="js/qrcode.js?v=8"></script>
+<script src="js/net.js?v=8"></script>
+<script src="js/app.js?v=8"></script>
 </body>
 </html>

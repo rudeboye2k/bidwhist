@@ -121,8 +121,9 @@ makes **13 books** per hand.
   takes all six kitty cards, and buries six — and the buried book counts as the
   bidding team's first book.
 - **The play.** The bidder leads. Follow suit if you can. The Big and Little
-  Jokers are the top two trumps. In No-Trump the jokers are dead cards: they
-  can never win a book and only fall when you're void of the led suit.
+  Jokers are the top two trumps. In No-Trump the jokers are throw-offs: they
+  can never win a book, can't be led (unless they're all you have left), and
+  only fall when you're void of the led suit.
 - **The score.** Make the bid and the bidding team scores *every* book past
   six; get set and lose the bid amount instead. No-Trump doubles it either
   way. Defenders set a bid by winning **8 − bid** books (four books stops a

@@ -740,7 +740,7 @@
           G.legalIds = new Set(legal.map((c) => c.id));
           G.awaiting = 'play'; // before render so illegal cards dim
           renderHand();
-          actionHint(trick.length === 0 ? 'You lead — pick a card.' : 'Your play.');
+          actionHint(trick.length === 0 ? 'You lead — pick a card.' + (G.contract.type === 'notrump' && G.hands[0].some((c) => c.joker) && legal.length < G.hands[0].length ? ' (Jokers are throw-offs in No-Trump — no leading them.)' : '') : 'Your play.');
           card = await humanInput('play');
           G.legalIds = new Set();
         } else {
@@ -1143,7 +1143,9 @@
       G.awaiting = 'play';
       G.legalIds = new Set(view.you.legalIds || []);
       G.resolve = (card) => send({ type: 'play', cardId: card.id });
-      renderHand(); actionHint('Your play.');
+      const ntJokerHold = G.contract && G.contract.type === 'notrump' && !(view.trick && view.trick.length) &&
+        G.hands[0].some((c) => c.joker && !G.legalIds.has(c.id));
+      renderHand(); actionHint('Your play.' + (ntJokerHold ? ' (Jokers are throw-offs in No-Trump — no leading them.)' : ''));
     }
   }
 

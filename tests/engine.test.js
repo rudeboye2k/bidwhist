@@ -96,6 +96,13 @@ check('NT: joker cannot be used to follow suit',
   legal.length === 1 && legal[0].id === 'D3');
 legal = E.legalPlays([BJ, c('S', 3)], [{ player: 0, card: c('D', 8) }], ntUp);
 check('NT: void of led suit may throw joker', legal.length === 2);
+legal = E.legalPlays([BJ, LJ, c('S', 3)], [], ntUp);
+check('NT: jokers cannot be led while holding a real card',
+  legal.length === 1 && legal[0].id === 'S3');
+legal = E.legalPlays([BJ, LJ], [], ntUp);
+check('NT: only jokers left — may lead one', legal.length === 2);
+legal = E.legalPlays([BJ, c('S', 3)], [], { amount: 4, type: 'uptown', trump: 'H', direction: 'uptown' });
+check('trump contract: jokers may be led', legal.length === 2);
 
 // ---- scoring ----
 const rules = E.DEFAULT_RULES;

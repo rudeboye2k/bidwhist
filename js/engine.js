@@ -118,8 +118,9 @@
     return 0;
   }
 
-  // Led suit of a trick-in-progress. In no-trump a led joker sets no suit; the
-  // first non-joker card played determines what must be followed.
+  // Led suit of a trick-in-progress. In no-trump a joker is only led when it's
+  // all a player has left; it sets no suit, and the first real card played
+  // determines what must be followed.
   function trickLedSuit(trick, contract) {
     for (const play of trick) {
       const s = effectiveSuit(play.card, contract);
@@ -129,7 +130,13 @@
   }
 
   function legalPlays(hand, trick, contract) {
-    if (trick.length === 0) return hand.slice(); // any card may be led
+    if (trick.length === 0) {
+      // Any card may be led — except that in no-trump the jokers are strictly
+      // throw-offs: you can't lead one while you hold a real card.
+      if (contract.type !== 'notrump') return hand.slice();
+      const real = hand.filter((c) => !c.joker);
+      return real.length ? real : hand.slice();
+    }
     const led = trickLedSuit(trick, contract);
     if (!led) return hand.slice(); // no-trump, only jokers down so far
     const follow = hand.filter((c) => effectiveSuit(c, contract) === led);
