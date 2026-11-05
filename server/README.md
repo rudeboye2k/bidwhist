@@ -21,11 +21,13 @@ is covered by `../tests/room.test.js`. The Worker is just transport.
 
 ## Deploy
 
-Durable Objects need the **Workers Paid** plan (~$5/mo).
+Runs on the **Workers Free plan** — the Durable Object here uses the SQLite
+storage backend (`new_sqlite_classes`), which is free-tier eligible, so no paid
+plan is required.
 
 ```sh
 cd server
-npx wrangler login          # once
+npx wrangler login          # once (opens a browser)
 npx wrangler deploy         # bundles worker.js (esbuild) + creates the DO
 ```
 

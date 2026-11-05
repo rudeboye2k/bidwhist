@@ -1,6 +1,7 @@
 # Cloudflare Worker + Durable Objects backend for Bid Whist online play.
-# Deploy from this folder:  cd server && npx wrangler deploy
-# (Durable Objects require the Workers Paid plan.)
+# Deploy from this folder:  cd server && npx wrangler login && npx wrangler deploy
+# Runs on the Workers FREE plan — SQLite-backed Durable Objects (below) are
+# free-tier eligible, so no paid plan is required.
 
 name = "bidwhist-server"
 main = "worker.js"
