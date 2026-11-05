@@ -28,7 +28,9 @@
   // Accept only small inline image data URLs; anything else falls back to a
   // client-generated cartoon avatar. Caps abuse and per-message bloat.
   function cleanAvatar(a) {
-    if (typeof a !== 'string' || a.length > 40000 || !/^data:image\//.test(a)) return null;
+    if (typeof a !== 'string') return null;
+    if (/^cartoon:\d{1,2}\.\d{1,2}$/.test(a)) return a;          // live emoji cartoon
+    if (a.length > 40000 || !/^data:image\/(jpeg|png|webp);base64,/.test(a)) return null;
     return a;
   }
   function cleanName(n, fallback) {

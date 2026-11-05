@@ -51,6 +51,34 @@ aggression back when the table keeps getting set, plus a per-seat **read on your
 bidding** that it voices at the table. It gets smarter about *you*, without ever
 degrading its normal play.
 
+## Phones, tablets and browsers
+
+The layout adapts to the screen rather than just shrinking:
+
+- **Phones (portrait):** opponents sit in a row across the top, the score lives
+  in the header with a ☰ menu, the table is sized to fit the screen with the
+  bid panel visible, and your hand fans to fit any width. When you pick up the
+  kitty, the 18 cards fan into two rows so every card is easy to tap.
+- **Phones sideways:** table on the left, controls in a column on the right.
+- **Tablets / laptops:** the classic table; on shorter screens the cards scale
+  down so the action bar never falls below the fold.
+- **Touch-friendly:** instant taps (no double-tap zoom delay), no "sticky"
+  hover on touch screens, 16px text fields so iPhone Safari doesn't zoom in,
+  iPhone notch/home-bar safe areas, and dialogs that scroll on small screens.
+- **Sharing on phones:** the lobby's **Share invite** button opens the native
+  share sheet (Messages, WhatsApp, …).
+- **Avatars on every device:** cartoon avatars are drawn live with each
+  device's own color-emoji font (Apple, Samsung, Google, Windows), not baked
+  into an image, so they always appear.
+
+Layout-checked (in Chromium's device emulation) on iPhone SE, iPhone 14 Pro
+Max, Galaxy S8, Galaxy S9+, Pixel 7, iPad Mini, Galaxy Tab S4, iPad Pro
+(landscape), a phone in landscape, and a 1366×768 laptop: no sideways
+scrolling, nothing off-screen, no overlapping seats, controls on screen. It
+uses only widely supported web features (with fallbacks, e.g. `vh` behind
+`dvh`), targeting current Safari (iOS/iPadOS/macOS), Chrome, Edge, Firefox and
+Samsung Internet.
+
 ## The game
 
 Bid Whist is the classic African-American partnership trick-taking game: four

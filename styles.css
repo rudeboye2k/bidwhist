@@ -25,17 +25,26 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body { height: 100%; }
+/* Stop iOS from inflating text in landscape; kill the grey tap flash. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { -webkit-tap-highlight-color: transparent; }
+/* Buttons and cards respond instantly to taps (no double-tap-zoom delay). */
+button, .card, .chipbtn, summary, .splash-profile { touch-action: manipulation; }
 
 body {
   font-family: var(--font-body);
   color: var(--cream);
   background:
     radial-gradient(120% 90% at 50% 0%, #33180f 0%, var(--room) 45%, var(--room-dark) 100%);
-  min-height: 100vh;
+  min-height: 100vh; min-height: 100dvh;
   overflow-x: hidden;
 }
 
-.room { position: relative; min-height: 100vh; padding: 0 20px 28px; }
+.room {
+  position: relative; min-height: 100vh; min-height: 100dvh;
+  /* respect iPhone notch / home-indicator safe areas */
+  padding: 0 max(20px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+}
 
 .grain {
   position: fixed; inset: 0; pointer-events: none; z-index: 40; opacity: .5;
@@ -123,7 +132,7 @@ body {
 .nameplate {
   display: flex; flex-direction: row; align-items: center; gap: 9px; line-height: 1.15;
   background: rgba(10, 26, 19, .72); border: 1px solid rgba(212,169,78,.35);
-  border-radius: 12px; padding: 5px 14px 5px 7px; backdrop-filter: blur(2px);
+  border-radius: 12px; padding: 5px 14px 5px 7px; -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
   transition: box-shadow .25s, border-color .25s;
 }
 .nameplate .np-text { display: flex; flex-direction: column; align-items: flex-start; }
@@ -138,6 +147,17 @@ body {
   border: 1.5px solid rgba(212, 169, 78, .55); overflow: hidden;
   box-shadow: 0 1px 4px rgba(0,0,0,.45); user-select: none;
 }
+/* Cartoon avatars are live emoji text: name every platform's color-emoji font
+   explicitly so iOS, Android/Samsung, Windows and Linux all pick theirs. Size
+   scales with the circle (0.62em of the avatar's font-size). */
+.avatar-emoji {
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    "Samsung Color Emoji", "Twemoji Mozilla", "EmojiOne Color", "Segoe UI Symbol", sans-serif;
+  font-style: normal; font-weight: 400; line-height: 1;
+  display: block; transform: translateY(.04em);
+  -webkit-text-size-adjust: none; text-size-adjust: none;
+}
+.avatar.photo { background-size: cover; background-position: center; }
 .avatar.big { width: 56px; height: 56px; font-size: 30px; }
 .avatar.huge { width: 92px; height: 92px; font-size: 48px; border-width: 2px; }
 .nameplate.turn { border-color: var(--gold-bright); box-shadow: 0 0 18px rgba(240,205,120,.5); }
@@ -259,18 +279,26 @@ body {
 /* ---------- human hand ---------- */
 
 .hand {
+  width: 100%; /* measure the available width, not the cards (layoutHand) */
   display: flex; justify-content: center; align-items: flex-end;
   min-height: calc(var(--card-h) + 26px); padding: 0 40px;
 }
 .hand .card {
-  margin: 0 calc(var(--overlap, -26px) / 2); cursor: pointer;
+  margin: 0; cursor: pointer; /* overlap is set per card by layoutHand() */
   transition: transform .16s ease, box-shadow .16s ease, filter .16s;
   animation: dealIn .4s cubic-bezier(.2,.8,.3,1) both;
   animation-delay: var(--deal-delay, 0s);
 }
-.hand .card:hover { transform: translateY(-14px); box-shadow: 0 10px 22px rgba(0,0,0,.5); z-index: 5; }
+/* Hover-lift only on real mice — on touch screens :hover "sticks" after a tap. */
+@media (hover: hover) and (pointer: fine) {
+  .hand .card:hover { transform: translateY(-14px); box-shadow: 0 10px 22px rgba(0,0,0,.5); z-index: 5; }
+  .hand .card.disabled:hover { transform: none; box-shadow: 0 3px 8px rgba(0,0,0,.4); }
+}
 .hand .card.disabled { cursor: default; filter: brightness(.62) saturate(.7); }
-.hand .card.disabled:hover { transform: none; box-shadow: 0 3px 8px rgba(0,0,0,.4); }
+/* Big hands on narrow screens fan into two overlapping rows (see layoutHand). */
+.hand.two-rows { flex-wrap: wrap; align-content: flex-end; min-height: calc(var(--card-h) * 1.6 + 26px); }
+.hand-break { flex-basis: 100%; height: 0; }
+.hand .card.row2 { margin-top: calc(var(--card-h) * -0.4); }
 .hand .card.selected {
   transform: translateY(-20px);
   box-shadow: 0 0 0 2px var(--gold-bright), 0 12px 22px rgba(0,0,0,.55);
@@ -358,8 +386,14 @@ body {
 
 .overlay {
   position: fixed; inset: 0; z-index: 60; display: none;
-  align-items: center; justify-content: center; padding: 24px;
-  background: rgba(12, 5, 3, .78); backdrop-filter: blur(3px);
+  /* Dialogs taller than the screen (phones, landscape) scroll instead of being
+     cut off: flex + margin:auto on the dialog centers it when it fits and
+     top-aligns it when it doesn't. */
+  align-items: flex-start; justify-content: center;
+  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+           max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgba(12, 5, 3, .78); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
 }
 .overlay.show { display: flex; }
 
@@ -368,7 +402,7 @@ body {
     radial-gradient(120% 100% at 50% 0%, #47231a 0%, #2c1512 55%, #1d0e0b 100%);
   border: 1px solid rgba(212, 169, 78, .45); border-radius: 24px;
   padding: 34px 38px; max-width: 480px; width: 100%; text-align: center;
-  box-shadow: 0 30px 80px rgba(0,0,0,.7);
+  box-shadow: 0 30px 80px rgba(0,0,0,.7); margin: auto;
   animation: modalIn .35s cubic-bezier(.2, .9, .3, 1.15) both;
 }
 .modal.wide { max-width: 640px; text-align: left; }
@@ -545,3 +579,203 @@ body {
 .online-advanced[open] summary::before { content: "▾ "; }
 .online-advanced .online-field { margin: 8px 0 4px; }
 .online-advanced .online-sub { text-align: left; margin-top: 6px; }
+
+
+/* Text fields at 16px+ so iPhone/iPad Safari doesn't zoom the page on focus. */
+input[type="text"], input:not([type]), select { font-size: 16px; }
+
+/* =====================================================================
+   RESPONSIVE — phones, tablets, short laptop screens, phones sideways
+   ===================================================================== */
+
+/* Compact header score + ☰ menu (hidden on wide screens). */
+.topbar { position: relative; }
+.mini-score, .menu-toggle { display: none; }
+.mini-score {
+  align-items: baseline; gap: 6px; font-family: var(--font-display);
+  background: rgba(0,0,0,.28); border: 1px solid rgba(212,169,78,.3);
+  border-radius: 999px; padding: 4px 12px; white-space: nowrap;
+}
+.mini-score b { font-size: 18px; color: var(--cream); }
+.mini-score span:first-child b { color: var(--gold-bright); }
+.mini-score small { font-family: var(--font-body); font-size: 9px; letter-spacing: .18em; text-transform: uppercase; color: var(--gold-dim); }
+.mini-dash { color: var(--gold-dim); }
+
+/* Score panel drops below the table here, so keep the score in the header. */
+@media (max-width: 1120px) {
+  .mini-score { display: inline-flex; }
+}
+
+/* Laptops / iPad landscape with short screens: scale the table so the action
+   bar stays on screen. */
+@media (min-width: 761px) and (min-height: 501px) and (max-height: 900px) {
+  :root { --card-w: 64px; --card-h: 90px; }
+  .table { height: clamp(460px, calc(100vh - 275px), 640px); height: clamp(460px, calc(100dvh - 275px), 640px); }
+  .card .pip { font-size: 28px; }
+  .trick .played { top: 48%; }
+}
+
+/* ---------- phones (portrait) ---------- */
+@media (max-width: 600px) {
+  :root { --card-w: 50px; --card-h: 72px; }
+  .room { padding: 0 max(10px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+
+  .topbar { align-items: center; gap: 10px; padding: max(10px, env(safe-area-inset-top)) 2px 8px; flex-wrap: nowrap; }
+  .brand { font-size: 22px; flex: 1; white-space: nowrap; }
+  .tagline { display: none; }
+  .menu-toggle { display: inline-flex; align-items: center; padding: 7px 13px; font-size: 17px; line-height: 1; letter-spacing: 0; }
+  .topnav {
+    display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 55;
+    flex-direction: column; gap: 8px; padding: 12px; min-width: 200px;
+    background: #2a1511; border: 1px solid rgba(212,169,78,.4); border-radius: 14px;
+    box-shadow: 0 16px 40px rgba(0,0,0,.6);
+  }
+  .topbar.menu-open .topnav { display: flex; }
+  .topnav .btn { width: 100%; padding: 11px 14px; }
+
+  .layout { margin-top: 10px; gap: 12px; }
+  .table {
+    height: clamp(330px, calc(100vh - 244px), 540px);
+    height: clamp(330px, calc(100dvh - 244px), 540px);
+    border-radius: 24px;
+  }
+  .rail { inset: 6px; border-radius: 19px; }
+
+  /* Opponents in a row across the top: left · partner · right. */
+  .seat-north, .seat-west, .seat-east { width: 32%; top: 10px; transform: none; gap: 4px; }
+  .seat-north { left: 34%; }
+  .seat-west { left: 1.5%; }
+  .seat-east { left: auto; right: 1.5%; }
+  .seat:not(.seat-south) .nameplate { flex-direction: column; gap: 3px; padding: 6px 4px; width: 100%; }
+  .seat:not(.seat-south) .nameplate .np-text { align-items: center; max-width: 100%; text-align: center; }
+  .nameplate .pname, .nameplate .prole { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nameplate .pname { font-size: 13px; }
+  .nameplate .prole { font-size: 8px; letter-spacing: .12em; }
+  .seat:not(.seat-south) .avatar { width: 30px; height: 30px; font-size: 17px; }
+  .bid-chip { font-size: 11px; padding: 3px 8px; max-width: 100%; line-height: 1.3; }
+
+  /* You: hand on top, then [nameplate | your bid] in one row beneath it. */
+  .seat-south {
+    bottom: 6px; flex-direction: row; flex-wrap: wrap;
+    justify-content: center; align-items: center; column-gap: 8px; row-gap: 4px;
+  }
+  .seat-south .hand { order: 1; flex: 0 0 100%; padding: 0 6px; min-height: calc(var(--card-h) + 12px); }
+  .seat-south .hand.two-rows { min-height: calc(var(--card-h) * 1.6 + 12px); }
+  .seat-south .nameplate { order: 2; padding: 3px 10px 3px 4px; }
+  .seat-south .bid-chip { order: 3; }
+  .seat-south .bid-chip:empty { display: none; }
+  .seat-south .avatar { width: 24px; height: 24px; font-size: 14px; }
+
+  .card { border-radius: 6px; }
+  .card .pip { font-size: 21px; }
+  .card .idx { font-size: 12px; top: 3px; left: 4px; }
+  .card .idx.flip { bottom: 3px; right: 4px; }
+  .card.joker .pip { font-size: 19px; }
+  .card.joker .idx { font-size: 8px; }
+
+  .kitty { top: 50%; }
+  .kitty .card { width: 30px; height: 42px; margin: 0 -11px; }
+  .kitty::after { margin-left: 16px; font-size: 9px; }
+  .trick .played { top: 50%; }
+  .trick .played.from-0 { transform: translate(-50%, -50%) translateY(38px) rotate(-2deg); }
+  .trick .played.from-1 { transform: translate(-50%, -50%) translateX(-52px) rotate(5deg); }
+  .trick .played.from-2 { transform: translate(-50%, -50%) translateY(-38px) rotate(2deg); }
+  .trick .played.from-3 { transform: translate(-50%, -50%) translateX(52px) rotate(-5deg); }
+  .table-msg { top: calc(50% + 34px); font-size: 14px; white-space: normal; width: 88%; }
+
+  /* Bid panel: three compact rows — amounts, direction, Place Bid / Pass. */
+  .action-bar { margin-top: 10px; min-height: 0; padding: 10px; gap: 8px; border-radius: 14px; }
+  .bid-group .lbl { display: none; }
+  .bid-col { width: 100%; gap: 6px; }
+  .bid-col:last-child { flex-direction: row; justify-content: center; }
+  .bid-col:last-child .btn { flex: 1; max-width: 170px; }
+  .chipbtn { width: 40px; height: 40px; font-size: 15px; }
+  .chipbtn.wide { padding: 0 12px; font-size: 13px; }
+  .action-hint { font-size: 14px; text-align: center; }
+
+  .side { flex-direction: column; }
+  .score-num { font-size: 34px; }
+
+  /* Dialogs */
+  .modal, .splash-card { padding: 24px 18px; border-radius: 20px; }
+  .modal-title { font-size: 22px; }
+  .splash-title { font-size: 46px; }
+  .splash-copy { font-size: 14px; }
+  .online-split { flex-direction: column; }
+  .online-or { padding: 0; }
+  .profile-summary { flex-wrap: wrap; justify-content: center; }
+  .profile-summary-name { flex: 1 1 auto; }
+  .qr { width: 136px; height: 136px; }
+  .share-actions .btn { flex: 1 1 140px; }
+  .settings .setting { flex-wrap: wrap; }
+  .profile-name input { width: 100%; }
+}
+
+/* ---------- phones held sideways (short landscape) ---------- */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root { --card-w: 46px; --card-h: 66px; }
+  .room { padding: 0 max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+  .topbar { align-items: center; gap: 10px; padding: 6px 2px 4px; flex-wrap: nowrap; }
+  .brand { font-size: 20px; flex: 1; white-space: nowrap; }
+  .tagline { display: none; }
+  .mini-score { display: inline-flex; }
+  .menu-toggle { display: inline-flex; align-items: center; padding: 6px 12px; font-size: 16px; line-height: 1; }
+  .topnav {
+    display: none; position: absolute; right: 0; top: calc(100% + 4px); z-index: 55;
+    flex-direction: column; gap: 6px; padding: 10px; min-width: 190px;
+    background: #2a1511; border: 1px solid rgba(212,169,78,.4); border-radius: 14px;
+    box-shadow: 0 16px 40px rgba(0,0,0,.6);
+  }
+  .topbar.menu-open .topnav { display: flex; }
+  .topnav .btn { width: 100%; padding: 9px 14px; }
+
+  /* Table on the left, controls in a column on the right. */
+  .layout { margin-top: 6px; gap: 10px; }
+  .table-zone { display: grid; grid-template-columns: minmax(0, 1fr) 236px; gap: 10px; align-items: stretch; }
+  .table { height: calc(100vh - 62px); height: calc(100dvh - 62px); min-height: 250px; border-radius: 22px; }
+  .rail { inset: 6px; border-radius: 17px; }
+  .action-bar { margin-top: 0; flex-direction: column; justify-content: center; padding: 10px; gap: 8px; }
+  .bid-group .lbl { display: none; }
+  .bid-col { width: 100%; gap: 6px; }
+  .bid-col:last-child { flex-direction: row; }
+  .bid-col:last-child .btn { flex: 1; }
+  .chipbtn { width: 36px; height: 36px; font-size: 14px; }
+  .chipbtn.wide { padding: 0 9px; font-size: 12px; }
+  .action-hint { font-size: 14px; text-align: center; }
+
+  /* Seats: partner top-center as a slim row; opponents mid-left/right. */
+  .seat-north, .seat-west, .seat-east { width: auto; max-width: 30%; gap: 3px; }
+  .seat-north { top: 8px; flex-direction: row; align-items: center; }
+  .seat-west { left: 10px; }
+  .seat-east { right: 10px; }
+  .nameplate { padding: 3px 9px 3px 3px; gap: 6px; }
+  .nameplate .pname { font-size: 12.5px; }
+  .nameplate .prole { font-size: 8px; letter-spacing: .12em; }
+  .avatar { width: 24px; height: 24px; font-size: 14px; }
+  .bid-chip { font-size: 10.5px; padding: 2px 8px; max-width: 150px; }
+
+  /* You: just the hand along the bottom; your bid pill tucked top-left. */
+  .seat-south { bottom: 6px; }
+  .seat-south .nameplate { display: none; }
+  .seat-south .hand { padding: 0 8px; min-height: calc(var(--card-h) + 10px); }
+  .seat-south .bid-chip { position: absolute; left: 4px; bottom: calc(100% + 4px); }
+  .seat-south .bid-chip::before { content: "You · "; font-style: normal; color: var(--gold-dim); }
+  .seat-south .bid-chip:empty::before { content: none; }
+
+  .card .pip { font-size: 19px; }
+  .card .idx { font-size: 11px; top: 3px; left: 4px; }
+  .card .idx.flip { bottom: 3px; right: 4px; }
+  .card.joker .idx { font-size: 7px; }
+  .kitty { top: 42%; }
+  .kitty .card { width: 28px; height: 40px; margin: 0 -10px; }
+  .trick .played { top: 44%; }
+  .trick .played.from-0 { transform: translate(-50%, -50%) translateY(30px) rotate(-2deg); }
+  .trick .played.from-1 { transform: translate(-50%, -50%) translateX(-50px) rotate(5deg); }
+  .trick .played.from-2 { transform: translate(-50%, -50%) translateY(-30px) rotate(2deg); }
+  .trick .played.from-3 { transform: translate(-50%, -50%) translateX(50px) rotate(-5deg); }
+  .table-msg { top: 62%; font-size: 13px; }
+
+  .modal, .splash-card { padding: 20px 18px; }
+  .splash-title { font-size: 38px; margin-bottom: 8px; }
+  .splash-copy { margin-bottom: 14px; }
+}

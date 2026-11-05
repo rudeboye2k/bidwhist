@@ -28,11 +28,19 @@
   function seatVerb(seat, base) { return seat === G.viewSeat ? base : base + 's'; }
 
   // ---- profile & avatars ----------------------------------------------------
-  // Your name + avatar, saved locally. The avatar is always a small image data
-  // URL (an uploaded photo, or a rendered cartoon) so it shares cleanly online.
+  // Your name + avatar, saved locally and shared online. An avatar value is one
+  // of two things:
+  //   'cartoon:E.P'          — an animal (CARTOONS[E]) on a gradient (PALETTE[P]).
+  //                            Drawn as live text with the device's own emoji
+  //                            font, so it shows on every phone, tablet and
+  //                            desktop. (Rasterizing emoji into an image was
+  //                            unreliable — some devices drew a blank.)
+  //   'data:image/jpeg;...'  — an uploaded photo, cropped small.
 
   const PROFILE_KEY = 'bidwhist.profile';
-  const CARTOONS = ['🦊','🐼','🐵','🐸','🐯','🦁','🐰','🐨','🐷','🐮','🐔','🐧','🐙','🦄','🐲','🐺','🦉','🐱','🐶','🐹','🐗','🦝','🐻','🦖','🐳','🦓','🐴','🐝'];
+  // Order is part of the wire format — append only. All are Emoji 5.0 (2017) or
+  // older, so even years-old Android/Samsung phones have them.
+  const CARTOONS = ['🦊','🐼','🐵','🐸','🐯','🦁','🐰','🐨','🐷','🐮','🐔','🐧','🐙','🦄','🐲','🐺','🦉','🐱','🐶','🐹','🐗','🐻','🦖','🐳','🦓','🐴','🐝'];
   const PALETTE = [
     ['#f0932b','#eb4d4b'], ['#22a6b3','#6ab04c'], ['#e056fd','#686de0'],
     ['#f9ca24','#f0932b'], ['#7ed6df','#30336b'], ['#eb4d4b','#6c5ce7'],
@@ -45,73 +53,84 @@
     for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
     return h >>> 0;
   }
+  function cartoonSpec(e, p) {
+    const c = PALETTE[p % PALETTE.length];
+    return { emoji: CARTOONS[e % CARTOONS.length], c1: c[0], c2: c[1], code: `cartoon:${e % CARTOONS.length}.${p % PALETTE.length}` };
+  }
   function cartoonFor(seed) {
     const h = hashStr(seed);
-    const p = PALETTE[(h >>> 8) % PALETTE.length];
-    return { emoji: CARTOONS[h % CARTOONS.length], c1: p[0], c2: p[1] };
+    return cartoonSpec(h % CARTOONS.length, (h >>> 8) % PALETTE.length);
   }
   function randomCartoon() {
-    const emoji = CARTOONS[Math.floor(Math.random() * CARTOONS.length)];
-    const p = PALETTE[Math.floor(Math.random() * PALETTE.length)];
-    return { emoji, c1: p[0], c2: p[1] };
+    return cartoonSpec(Math.floor(Math.random() * CARTOONS.length), Math.floor(Math.random() * PALETTE.length));
   }
-  // Render a cartoon spec to a small PNG data URL (so it travels online).
-  function cartoonImage(spec) {
-    const S = 96, c = document.createElement('canvas'); c.width = c.height = S;
-    const x = c.getContext('2d');
-    const g = x.createLinearGradient(0, 0, S, S);
-    g.addColorStop(0, spec.c1); g.addColorStop(1, spec.c2);
-    x.fillStyle = g; x.fillRect(0, 0, S, S);
-    x.font = '58px serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
-    x.fillText(spec.emoji, S / 2, S / 2 + 4);
-    return c.toDataURL('image/png');
+  // Stored/shared avatar value → something applyAvatar can draw. Anything
+  // unrecognized falls back to a cartoon derived from `seed`.
+  function avatarFrom(value, seed) {
+    const m = /^cartoon:(\d{1,2})\.(\d{1,2})$/.exec(value || '');
+    if (m) return cartoonSpec(+m[1], +m[2]);
+    if (/^data:image\/(jpeg|png|webp);/.test(value || '')) return { img: value };
+    return cartoonFor(seed || 'player');
   }
-  // Cover-crop an uploaded image to a small JPEG data URL.
+
+  // Cover-crop an uploaded photo to a small JPEG. createObjectURL avoids
+  // loading a 12 MB phone photo into a giant base64 string first.
   function processAvatarFile(file) {
     return new Promise((res, rej) => {
-      const fr = new FileReader();
-      fr.onload = () => {
-        const img = new Image();
-        img.onload = () => {
-          const S = 96, c = document.createElement('canvas'); c.width = c.height = S;
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const S = 128, c = document.createElement('canvas'); c.width = c.height = S;
           const x = c.getContext('2d');
-          const scale = Math.max(S / img.width, S / img.height);
-          const w = img.width * scale, h = img.height * scale;
+          const scale = Math.max(S / img.naturalWidth, S / img.naturalHeight);
+          const w = img.naturalWidth * scale, h = img.naturalHeight * scale;
           x.drawImage(img, (S - w) / 2, (S - h) / 2, w, h);
-          res(c.toDataURL('image/jpeg', 0.7));
-        };
-        img.onerror = rej; img.src = fr.result;
+          res(c.toDataURL('image/jpeg', 0.78));
+        } catch (e) { rej(e); } finally { URL.revokeObjectURL(url); }
       };
-      fr.onerror = rej; fr.readAsDataURL(file);
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('unreadable image')); };
+      img.src = url;
     });
   }
 
   function loadProfile() {
     try {
       const p = JSON.parse(localStorage.getItem(PROFILE_KEY));
-      if (p && p.name && p.avatar) return p;
+      if (p && p.name && p.avatar) {
+        // Old canvas-rendered cartoons were PNG data URLs and could be blank on
+        // some devices — swap them for a live cartoon. Photos (JPEG) are kept.
+        if (/^data:image\/png;/.test(p.avatar)) { p.avatar = randomCartoon().code; saveProfile(p); }
+        return p;
+      }
     } catch (_) { /* fall through */ }
-    return { name: 'You', avatar: cartoonImage(randomCartoon()) }; // random cartoon by default
+    return { name: 'You', avatar: randomCartoon().code }; // random cartoon by default
   }
   function saveProfile(p) {
     try { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); } catch (_) { /* ignore */ }
   }
 
-  // Avatar to draw for a seat: an image for the local player / online players,
-  // a name-derived cartoon for solo AI seats and avatarless online seats.
+  // Avatar to draw for a seat: the player's own choice when known, otherwise a
+  // name-derived cartoon (solo AI seats, avatarless online seats).
   function avatarSpecFor(seat) {
     if (G.mode === 'online' && G.view && G.view.seats) {
       const s = G.view.seats[seat];
-      if (s && s.avatar) return { img: s.avatar };
-      return cartoonFor(((s && s.name) || 'seat') + '#' + seat);
+      return avatarFrom(s && s.avatar, ((s && s.name) || 'seat') + '#' + seat);
     }
-    if (seat === 0) return { img: G.profile.avatar };
+    if (seat === 0) return avatarFrom(G.profile.avatar, 'you#0');
     return cartoonFor(NAMES[seat] + '#' + seat);
   }
   function applyAvatar(el, spec) {
     if (!el) return;
-    if (spec.img) { el.style.backgroundImage = `url("${spec.img}")`; el.textContent = ''; }
-    else { el.style.backgroundImage = `linear-gradient(135deg, ${spec.c1}, ${spec.c2})`; el.textContent = spec.emoji; }
+    if (spec.img) {
+      el.classList.add('photo');
+      el.style.backgroundImage = `url("${spec.img}")`;
+      el.textContent = '';
+    } else {
+      el.classList.remove('photo');
+      el.style.backgroundImage = `linear-gradient(135deg, ${spec.c1}, ${spec.c2})`;
+      el.innerHTML = `<span class="avatar-emoji" aria-hidden="true">${spec.emoji}</span>`;
+    }
   }
 
   const STORAGE_KEY = 'bidwhist.rules';
@@ -214,6 +233,8 @@
     $('score-target').textContent = 'first to ' + G.rules.gameTarget;
     $('books-us').textContent = G.books[us];
     $('books-them').textContent = G.books[them];
+    $('mini-us').textContent = G.scores[us];     // compact header score (phones)
+    $('mini-them').textContent = G.scores[them];
   }
 
   function renderContractLine() {
@@ -348,8 +369,6 @@
     box.innerHTML = '';
     if (!G.hands || !G.hands[G.viewSeat]) return;
     const cards = E.sortHand(G.hands[G.viewSeat], sortDirection());
-    const overlap = cards.length > 13 ? -40 : -26;
-    box.style.setProperty('--overlap', overlap + 'px');
     cards.forEach((card, i) => {
       const el = cardEl(card, true);
       el.style.setProperty('--deal-delay', (i * 0.03) + 's');
@@ -363,7 +382,42 @@
       el.addEventListener('click', () => onHandCardClick(card));
       box.appendChild(el);
     });
+    layoutHand();
   }
+
+  // Fan the hand to fit whatever width this screen has. Cards overlap just
+  // enough to fit; if that would leave less than a comfortable tap target
+  // (e.g. 18 cards after picking up the kitty on a phone), split into two
+  // overlapping rows instead.
+  function layoutHand() {
+    const box = $('hand');
+    box.querySelectorAll('.hand-break').forEach((b) => b.remove());
+    const cards = [...box.querySelectorAll('.card')];
+    box.classList.remove('two-rows');
+    if (!cards.length) return;
+    const cw = cards[0].offsetWidth || 74;
+    const cs = getComputedStyle(box);
+    const avail = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const maxStep = cw * 0.7, MIN_TAP = 21; // px of each card left to tap
+    const stepFor = (n) => (n <= 1 ? cw : Math.min(maxStep, (avail - cw) / (n - 1)));
+    let rows = 1;
+    if (stepFor(cards.length) < MIN_TAP && cards.length > 9) rows = 2;
+    const perRow = Math.ceil(cards.length / rows);
+    const step = stepFor(perRow);
+    cards.forEach((el, i) => {
+      const first = i % perRow === 0;
+      el.style.marginLeft = first ? '0px' : (step - cw) + 'px';
+      el.classList.toggle('row2', rows === 2 && i >= perRow);
+      if (rows === 2 && i === perRow) {
+        const br = document.createElement('span'); br.className = 'hand-break';
+        box.insertBefore(br, el);
+      }
+    });
+    if (rows === 2) box.classList.add('two-rows');
+  }
+  let resizeTimer = null;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(layoutHand, 120); });
+  window.addEventListener('orientationchange', () => setTimeout(layoutHand, 250));
 
   function addPlayedCard(seat, card) {
     const wrap = document.createElement('div');
@@ -827,11 +881,11 @@
 
   // Show the current player (avatar + name) in the online setup.
   function renderOnlineProfile() {
-    applyAvatar($('online-avatar'), { img: G.profile.avatar });
+    applyAvatar($('online-avatar'), avatarFrom(G.profile.avatar, 'you#0'));
     $('online-pname').textContent = G.profile.name;
   }
   function renderSplashProfile() {
-    applyAvatar($('splash-avatar'), { img: G.profile.avatar });
+    applyAvatar($('splash-avatar'), avatarFrom(G.profile.avatar, 'you#0'));
     $('splash-pname').textContent = G.profile.name;
   }
 
@@ -1080,7 +1134,7 @@
       const av = document.createElement('span');
       av.className = 'avatar';
       if (s.kind === 'empty') { av.classList.add('seat-empty'); av.textContent = seatLetter[s.seat]; }
-      else applyAvatar(av, s.avatar ? { img: s.avatar } : cartoonFor((s.name || 'seat') + '#' + s.seat));
+      else applyAvatar(av, avatarFrom(s.avatar, (s.name || 'seat') + '#' + s.seat));
       const nm = document.createElement('span');
       nm.className = 'r-name';
       nm.textContent = s.kind === 'empty' ? '— open —' : (s.you ? 'You' : (s.name || 'Player'));
@@ -1141,16 +1195,17 @@
     editorImg = G.profile.avatar;
     editorCartoon = null;
     $('profile-name').value = G.profile.name === 'You' ? '' : G.profile.name;
+    $('profile-error').textContent = '';
     refreshProfilePreview();
     $('modal-profile').classList.add('show');
   }
   function refreshProfilePreview() {
-    applyAvatar($('profile-preview'), editorCartoon || { img: editorImg || G.profile.avatar });
+    applyAvatar($('profile-preview'), editorCartoon || avatarFrom(editorImg || G.profile.avatar, 'you#0'));
   }
   function saveProfileFromEditor() {
     const name = ($('profile-name').value || '').trim().slice(0, 16) || 'You';
     let avatar = G.profile.avatar;
-    if (editorCartoon) avatar = cartoonImage(editorCartoon);
+    if (editorCartoon) avatar = editorCartoon.code;
     else if (editorImg) avatar = editorImg;
     G.profile = { name, avatar };
     saveProfile(G.profile);
@@ -1224,6 +1279,29 @@
     location.reload();
   });
   $('btn-copy-link').addEventListener('click', () => copyText(inviteLink(Online.code), $('btn-copy-link'), 'Copy invite link'));
+  // Phones/tablets: the native share sheet (Messages, WhatsApp, …) is the
+  // easiest way to send an invite by text.
+  if (navigator.share) {
+    $('btn-share-link').hidden = false;
+    $('btn-copy-link').classList.replace('primary', 'ghost');
+    $('btn-share-link').addEventListener('click', () => {
+      navigator.share({
+        title: 'Bid Whist',
+        text: `Pull up a chair — join my Bid Whist table. Game key: ${Online.code}`,
+        url: inviteLink(Online.code),
+      }).catch(() => { /* cancelled */ });
+    });
+  }
+
+  // Phone header: the nav collapses behind a ☰ toggle.
+  const closeMenu = () => { document.querySelector('.topbar').classList.remove('menu-open'); $('btn-menu').setAttribute('aria-expanded', 'false'); };
+  $('btn-menu').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = document.querySelector('.topbar').classList.toggle('menu-open');
+    $('btn-menu').setAttribute('aria-expanded', String(open));
+  });
+  $('topnav').addEventListener('click', closeMenu);
+  document.addEventListener('click', (e) => { if (!e.target.closest('.topbar')) closeMenu(); });
   $('btn-copy-key').addEventListener('click', () => copyText(Online.code, $('btn-copy-key'), 'Copy key only'));
   $('btn-reconnect').addEventListener('click', () => {
     $('modal-disconnect').classList.remove('show');
@@ -1244,8 +1322,9 @@
   $('avatar-file').addEventListener('change', async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
+    $('profile-error').textContent = '';
     try { editorImg = await processAvatarFile(file); editorCartoon = null; refreshProfilePreview(); }
-    catch (_) { /* ignore unreadable image */ }
+    catch (_) { $('profile-error').textContent = "Couldn't read that photo. Try a JPG or PNG (or take a screenshot of it)."; }
     e.target.value = '';
   });
   $('btn-rules').addEventListener('click', () => $('modal-howto').classList.add('show'));

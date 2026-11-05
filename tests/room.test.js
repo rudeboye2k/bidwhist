@@ -141,5 +141,18 @@ check('rooms have distinct codes', r1.code !== r2.code);
   check('played-card memory restored as a Set', r.memory instanceof Set);
 }
 
+// ---- avatars: cartoon codes + photos accepted, junk rejected ----
+{
+  const r = new Room('AVTR1', {});
+  const a = r.join('Cat', 'cartoon:17.3');
+  const b = r.join('Pic', 'data:image/jpeg;base64,/9j/4AAQ');
+  const c = r.join('Bad', 'javascript:alert(1)');
+  const d = r.join('Big', 'data:image/jpeg;base64,' + 'A'.repeat(50000));
+  check('cartoon avatar code accepted', r.seats[a.seat].avatar === 'cartoon:17.3');
+  check('jpeg photo avatar accepted', r.seats[b.seat].avatar.startsWith('data:image/jpeg'));
+  check('non-image avatar rejected', r.seats[c.seat].avatar === null);
+  check('oversized photo rejected', r.seats[d.seat].avatar === null);
+}
+
 if (failures) { console.error('\n' + failures + ' failure(s)'); process.exit(1); }
 console.log('\nAll room-core tests passed.');

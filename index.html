@@ -2,13 +2,19 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#170d0b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bid Whist">
+<meta name="format-detection" content="telephone=no">
 <title>Bid Whist — Uptown &amp; Downtown</title>
 <meta name="description" content="Classic partnership Bid Whist: bidding, jokers, the kitty, uptown and downtown — you and a partner against two rivals.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Libre+Franklin:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=3">
+<link rel="stylesheet" href="styles.css?v=4">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♠</text></svg>">
 </head>
 <body>
@@ -18,7 +24,11 @@
   <header class="topbar">
     <h1 class="brand">Bid<span class="brand-amp">&nbsp;</span><em>Whist</em></h1>
     <p class="tagline">uptown &middot; downtown &middot; no-trump</p>
-    <nav class="topnav">
+    <div class="mini-score" id="mini-score" aria-label="Score">
+      <span><small>Us</small> <b id="mini-us">0</b></span><span class="mini-dash">–</span><span><b id="mini-them">0</b> <small>Them</small></span>
+    </div>
+    <button class="btn ghost menu-toggle" id="btn-menu" type="button" aria-label="Menu" aria-expanded="false" aria-controls="topnav">&#9776;</button>
+    <nav class="topnav" id="topnav">
       <button class="btn ghost" id="btn-profile" type="button">Profile</button>
       <button class="btn ghost" id="btn-rules" type="button">How to Play</button>
       <button class="btn ghost" id="btn-settings" type="button">Table Rules</button>
@@ -160,6 +170,7 @@
           <button class="btn ghost" id="btn-shuffle-avatar" type="button">Shuffle Cartoon</button>
         </div>
         <input type="file" id="avatar-file" accept="image/*" hidden>
+        <p class="online-error" id="profile-error"></p>
       </div>
       <div class="modal-actions">
         <button class="btn primary" id="btn-profile-save" type="button">Save</button>
@@ -176,6 +187,7 @@
       <div class="share-box">
         <div class="qr" id="lobby-qr" title="Scan to join"></div>
         <div class="share-actions">
+          <button class="btn primary" id="btn-share-link" type="button" hidden>Share invite</button>
           <button class="btn primary" id="btn-copy-link" type="button">Copy invite link</button>
           <button class="btn ghost" id="btn-copy-key" type="button">Copy key only</button>
         </div>
@@ -267,16 +279,16 @@
   </div>
 </div>
 
-<script src="js/engine.js?v=3"></script>
-<script src="js/ai.js?v=3"></script>
+<script src="js/engine.js?v=4"></script>
+<script src="js/ai.js?v=4"></script>
 <script>
   // The site and the game server are one Cloudflare Worker, so the server is
   // simply this page's own address — nothing to configure. Only if you host the
   // page somewhere else (e.g. GitHub Pages) would you point it at the Worker:
   // window.BIDWHIST_SERVER = "https://bidwhist.<your-subdomain>.workers.dev";
 </script>
-<script src="js/qrcode.js?v=3"></script>
-<script src="js/net.js?v=3"></script>
-<script src="js/app.js?v=3"></script>
+<script src="js/qrcode.js?v=4"></script>
+<script src="js/net.js?v=4"></script>
+<script src="js/app.js?v=4"></script>
 </body>
 </html>

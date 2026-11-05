@@ -60,15 +60,16 @@ Client → server:
 
 | message | meaning |
 |---|---|
-| `{type:'hello', name, avatar?, token?}` | join a seat (with a name + optional avatar data URL), or reclaim one with a saved token |
+| `{type:'hello', name, avatar?, token?}` | join a seat (with a name + optional avatar), or reclaim one with a saved token |
 | `{type:'start'}` | host only — fill empty seats with AI and deal |
 | `{type:'nextHand'}` | host only — deal the next hand after one ends |
 | `{type:'intent', intent}` | a move: `{type:'bid'\|'declare'\|'discard'\|'play', ...}` |
 | `{type:'profile', name?, avatar?}` | update your display name / avatar mid-session |
 | `{type:'leave'}` | give up your seat |
 
-`avatar` is a small inline image data URL (the client sends a ~96px cartoon or a
-cropped photo); anything larger than 40 KB or not an image is ignored, and that
+`avatar` is either a cartoon code `cartoon:E.P` (animal index, color index —
+each client draws it with its own emoji font, so it works on every device) or a
+small JPEG/PNG/WebP photo data URL (≤ 40 KB). Anything else is ignored and that
 player falls back to a name-derived cartoon on each client.
 
 Server → client:
