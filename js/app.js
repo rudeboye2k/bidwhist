@@ -23,7 +23,7 @@
   // Start / deal-next powers come from the server (they pass on if the host leaves).
   function amHost() { return G.view ? !!G.view.hostToken : !!(typeof Online !== 'undefined' && Online.isHost); }
   function seatName(seat) {
-    if (G.mode === 'online' && G.view && G.view.seats) {
+    if (G.view && G.view.seats) {
       if (seat === G.viewSeat) return 'You';
       const s = G.view.seats[seat];
       return (s && s.name) || 'Player';
@@ -31,7 +31,11 @@
     if (seat === 0 && G.profile && G.profile.name) return G.profile.name;
     return NAMES[seat];
   }
-  function seatVerb(seat, base) { return seat === G.viewSeat ? base : base + 's'; }
+  function seatVerb(seat, base) { return seat === G.viewSeat ? base : base + (/(s|sh|ch|x)$/.test(base) ? 'es' : 's'); }
+  // "You & Marcus" — the two players on a team, by name.
+  function teamNames(team) {
+    return [team, team + 2].map((s) => (s === G.viewSeat ? 'You' : seatName(s))).join(' & ');
+  }
 
   // ---- profile & avatars ----------------------------------------------------
   // Your name + avatar, saved locally and shared online. An avatar value is one
@@ -119,7 +123,7 @@
   // Avatar to draw for a seat: the player's own choice when known, otherwise a
   // name-derived cartoon (solo AI seats, avatarless online seats).
   function avatarSpecFor(seat) {
-    if (G.mode === 'online' && G.view && G.view.seats) {
+    if (G.view && G.view.seats) {
       const s = G.view.seats[seat];
       return avatarFrom(s && s.avatar, ((s && s.name) || 'seat') + '#' + seat);
     }
@@ -144,7 +148,7 @@
   function loadRules() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      return { ...E.DEFAULT_RULES, ...(saved || {}) };
+      return E.cleanRules({ ...E.DEFAULT_RULES, ...(saved || {}) });
     } catch (_) { return { ...E.DEFAULT_RULES }; }
   }
 
@@ -174,6 +178,7 @@
     handResult: null,            // { highSeat, made, delta } shown on the seat
     liveTrick: [],               // cards on the felt right now (winning-card glow)
     seatBooks: [0, 0, 0, 0],     // books each player has taken this hand
+    shownIds: new Set(),         // cards already drawn in your hand (no re-deal animation)
   };
 
   // ---- sound, vibration & table effects -----------------------------------
@@ -335,10 +340,13 @@
         `<span class="jlab"><b>${big ? 'Big' : 'Little'}</b>${dead ? 'throw-off' : 'joker'}</span>` +
         `<span class="idx flip">&#9733;<small>${big ? 'BIG' : 'LIL'}</small></span>`;
       el.title = E.cardLabel(card) + (dead ? ' — dead in No-Trump' : '');
+      if (G.contract && G.contract.type !== 'notrump') el.classList.add('trump');
+      el.setAttribute('aria-label', cardWords(card));
       return el;
     }
     const red = card.suit === 'H' || card.suit === 'D';
-    el.className = 'card ' + (red ? 'red' : 'black');
+    el.className = 'card ' + (red ? 'red' : 'black') + ' suit-' + card.suit;
+    if (G.contract && G.contract.type !== 'notrump' && card.suit === G.contract.trump) el.classList.add('trump');
     const r = E.rankLabel(card.rank);
     const g = E.SUIT_GLYPHS[card.suit];
     el.innerHTML =
@@ -346,7 +354,19 @@
       `<span class="pip">${g}</span>` +
       `<span class="idx flip">${r}<small>${g}</small></span>`;
     el.title = E.cardLabel(card);
+    el.setAttribute('aria-label', cardWords(card));
     return el;
+  }
+
+  // "Queen of Hearts" — for screen readers.
+  const RANK_WORDS = { 11: 'Jack', 12: 'Queen', 13: 'King', 14: 'Ace' };
+  function cardWords(card) {
+    if (card.joker) return card.joker === 'big' ? 'Big Joker' : 'Little Joker';
+    return `${RANK_WORDS[card.rank] || card.rank} of ${E.SUIT_NAMES[card.suit]}`;
+  }
+  function announce(text) {
+    const el = $('sr-live'); if (!el) return;
+    el.textContent = ''; setTimeout(() => { el.textContent = text; }, 30);
   }
 
   // ---- rendering ------------------------------------------------------------
@@ -389,6 +409,177 @@
         : (c.type === 'uptown' ? 'Uptown' : 'Downtown') + ' in ' + E.SUIT_NAMES[c.trump]);
     line.innerHTML = `<b>${who}</b>: ${desc} — needs ${6 + c.amount} books`;
     renderSetMeter();
+    renderTrumpBadge();
+  }
+
+  // Always-on reminder of what's trump (and which way it runs).
+  function renderTrumpBadge() {
+    const b = $('trump-badge');
+    const c = G.contract;
+    if (!c) { b.hidden = true; b.innerHTML = ''; renderTools(); return; }
+    if (c.type === 'notrump') {
+      b.innerHTML = `<span class="tb-glyph nt">NT</span><span class="tb-text"><b>No-Trump</b><small>${c.direction === 'uptown' ? 'Uptown · high wins' : 'Downtown · low wins'}</small></span>`;
+    } else {
+      const red = c.trump === 'H' || c.trump === 'D';
+      b.innerHTML = `<span class="tb-glyph ${red ? 'red' : 'blk'} suit-${c.trump}">${E.SUIT_GLYPHS[c.trump]}</span>` +
+        `<span class="tb-text"><b>${E.SUIT_NAMES[c.trump]}<span class="tb-word"> trump</span></b><small>${c.type === 'uptown' ? 'Uptown · high wins' : 'Downtown · low wins'}</small></span>`;
+    }
+    b.title = 'Trump this hand';
+    b.hidden = false;
+    renderTools();
+  }
+
+  // Corner tools: Last book, Call renege, reactions.
+  function renderTools() {
+    const v = G.view;
+    const playing = !!(v && (v.phase === 'playing' || v.phase === 'handover'));
+    $('btn-last-book').hidden = !(G.lastTrick && G.lastTrick.cards && G.lastTrick.cards.length === 4 && playing);
+    $('btn-renege').hidden = !(v && v.rules && v.rules.renege && v.phase === 'playing' && !Online.watching);
+    $('btn-react').hidden = !G.running || Online.watching;
+  }
+
+  function showLastBook() {
+    const t = G.lastTrick; if (!t) return;
+    const box = $('lastbook');
+    box.innerHTML = '';
+    for (const p of t.cards) {
+      const spot = document.createElement('div');
+      spot.className = 'lb-spot at-' + slot(p.seat) + (p.seat === t.winner ? ' won' : '');
+      spot.appendChild(cardEl(p.card, true));
+      const nm = document.createElement('span'); nm.className = 'lb-name';
+      nm.textContent = p.seat === G.viewSeat ? 'You' : seatName(p.seat);
+      spot.appendChild(nm);
+      box.appendChild(spot);
+    }
+    const lead = t.cards[0];
+    $('lastbook-note').textContent = `${lead.seat === G.viewSeat ? 'You' : seatName(lead.seat)} led · ` +
+      `${t.winner === G.viewSeat ? 'you' : seatName(t.winner)} took it with the ${E.cardLabel(t.cards.find((p) => p.seat === t.winner).card)}.`;
+    $('modal-lastbook').classList.add('show');
+  }
+
+  // ---- reactions ----------------------------------------------------------------
+  function buildReactMenu() {
+    const m = $('react-menu');
+    m.innerHTML = '';
+    E.REACTIONS.forEach((txt, id) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.setAttribute('role', 'menuitem');
+      b.className = 'react-opt' + (txt.length <= 2 ? ' emoji' : '');
+      b.textContent = txt;
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (Online.conn) Online.conn.send({ type: 'react', id });
+        toggleReactMenu(false);
+      });
+      m.appendChild(b);
+    });
+  }
+  function toggleReactMenu(open) {
+    const m = $('react-menu');
+    if (open === undefined) open = m.hidden;
+    m.hidden = !open;
+    $('btn-react').setAttribute('aria-expanded', String(open));
+  }
+  function showReaction(seat, id) {
+    const text = E.REACTIONS[id]; if (!text) return;
+    const host = $('seat-' + slot(seat)); if (!host) return;
+    host.querySelectorAll('.react-bubble').forEach((b) => b.remove());
+    const b = document.createElement('div');
+    b.className = 'react-bubble' + (text.length <= 2 ? ' emoji' : '');
+    b.textContent = text;
+    host.appendChild(b);
+    Sound.play('turn');
+    if (seat !== G.viewSeat) announce(`${seatName(seat)}: ${text}`);
+    setTimeout(() => b.remove(), 2800);
+  }
+
+  // ---- coach --------------------------------------------------------------------
+  // The same brain the computer players use, offered as a suggestion.
+  function coachOn() { try { return localStorage.getItem('bidwhist.coach') === 'on'; } catch (_) { return false; } }
+  function myHand() { return (G.hands && G.hands[G.viewSeat] || []).filter((c) => !c.back); }
+  function liveTrickFromView(view) {
+    return (view && view.trick ? view.trick : []).map((p) => ({ player: p.seat, card: p.card }));
+  }
+  function bossCard(card) {
+    if (card.joker) return G.contract && G.contract.type !== 'notrump';
+    const dir = sortDirection();
+    const mine = new Set(myHand().map((c) => c.id));
+    for (let r = 2; r <= 14; r++) {
+      const id = card.suit + r;
+      if (r === card.rank || mine.has(id) || G.memory.has(id)) continue;
+      if (E.rankPower(r, dir) > E.rankPower(card.rank, dir)) return false;
+    }
+    return true;
+  }
+  function coachPlay(view) {
+    const trick = liveTrickFromView(view);
+    const hand = myHand();
+    const card = AI.choosePlay(hand, trick, G.contract, G.viewSeat, G.memory, 'regular');
+    const c = G.contract, seat = G.viewSeat;
+    const isTrump = (x) => c.type !== 'notrump' && (x.joker || x.suit === c.trump);
+    let why;
+    if (!trick.length) {
+      if (isTrump(card)) why = 'lead trump to pull theirs';
+      else if (bossCard(card)) why = 'lead your boss card — nobody can top it';
+      else why = 'lead low and let your partner work';
+    } else {
+      const led = E.trickLedSuit(trick, c);
+      const partnerHas = E.trickWinner(trick, c) === (seat + 2) % 4;
+      const wins = E.trickWinner(trick.concat([{ player: seat, card }]), c) === seat;
+      if (partnerHas && !wins) why = 'your partner has it — throw your cheapest card';
+      else if (wins && led && E.effectiveSuit(card, c) !== led && isTrump(card)) why = "you're out of the suit — trump it";
+      else if (wins) why = 'this takes the book as cheaply as possible';
+      else if (led && E.effectiveSuit(card, c) !== led) why = "you're out of the suit — throw off your weakest card";
+      else why = "can't win this one — throw low";
+    }
+    return { card, why };
+  }
+  function coachBidText(mustBid) {
+    const r = AI.chooseBid(myHand(), G.high, G.rules, mustBid, Math.random, null, G.viewSeat);
+    if (r.bid.pass) return 'Coach: pass on this one.';
+    const p = r.plan;
+    const where = p.type === 'notrump' ? `No-Trump, ${p.direction}` : `${p.direction} in ${E.SUIT_NAMES[p.trump]}`;
+    return `Coach: bid <b>${E.describeBid(r.bid)}</b> — you look strongest ${where}.`;
+  }
+
+  // ---- table record ----------------------------------------------------------------
+  const SOLO_REC_KEY = 'bidwhist.soloRecord';
+  function soloRecord() {
+    try { return JSON.parse(localStorage.getItem(SOLO_REC_KEY)) || { games: 0, wins: 0, bostons: 0 }; }
+    catch (_) { return { games: 0, wins: 0, bostons: 0 }; }
+  }
+  function noteSoloGame(won) {
+    const r = soloRecord(); r.games++; if (won) r.wins++;
+    try { localStorage.setItem(SOLO_REC_KEY, JSON.stringify(r)); } catch (_) { /* ignore */ }
+  }
+  function noteSoloBoston() {
+    const r = soloRecord(); r.bostons++;
+    try { localStorage.setItem(SOLO_REC_KEY, JSON.stringify(r)); } catch (_) { /* ignore */ }
+  }
+  function recordHtml() {
+    const R = G.view && G.view.record;
+    if (!R) return '';
+    const us = myTeam(), them = 1 - us;
+    let html = '<div class="record"><h3>Table record</h3>';
+    html += `<p>Games: ${teamLabel(us)} <b>${R.teamWins[us]}</b> · ${teamLabel(them)} <b>${R.teamWins[them]}</b>` +
+      ` &nbsp;·&nbsp; Bostons: <b>${R.bostons[us]}</b>–<b>${R.bostons[them]}</b>` +
+      ` &nbsp;·&nbsp; Sets: <b>${R.sets[us]}</b>–<b>${R.sets[them]}</b></p>`;
+    const pairs = Object.values(R.pairs || {}).filter((p) => p.wins > 0).sort((a, b) => b.wins - a.wins || a.games - b.games);
+    if (pairs.length && !Online.local) html += `<p>Best duo: <b>${pairs[0].names.join(' & ')}</b> (${pairs[0].wins}–${pairs[0].games - pairs[0].wins})</p>`;
+    const players = Object.values(R.players || {}).filter((p) => p.bids > 0).sort((a, b) => (b.made / b.bids) - (a.made / a.bids) || b.bids - a.bids);
+    if (players.length) html += `<p>Best bidder: <b>${players[0].name}</b> (made ${players[0].made} of ${players[0].bids})</p>`;
+    if (Online.local) {
+      const L = soloRecord();
+      html += `<p class="lifetime">All-time vs the computer: <b>${L.wins}–${L.games - L.wins}</b> · Bostons <b>${L.bostons}</b></p>`;
+    }
+    return html + '</div>';
+  }
+  function renderRecordLine() {
+    const el = $('sb-record'); if (!el) return;
+    const R = G.view && G.view.record;
+    if (!R || !R.games) { el.innerHTML = ''; return; }
+    const us = myTeam();
+    el.innerHTML = `Games won: ${teamLabel(us)} <b>${R.teamWins[us]}</b> · ${teamLabel(1 - us)} <b>${R.teamWins[1 - us]}</b>`;
   }
 
   function renderSetMeter() {
@@ -565,11 +756,13 @@
   function renderHand() {
     const box = $('hand');
     box.innerHTML = '';
-    if (!G.hands || !G.hands[G.viewSeat]) return;
-    const cards = E.sortHand(G.hands[G.viewSeat], sortDirection(), G.contract);
+    if (!G.hands || !G.hands[G.viewSeat] || Online.watching) return;
+    const cards = E.sortHand(G.hands[G.viewSeat].filter((c) => !c.back), sortDirection(), G.contract);
     cards.forEach((card, i) => {
       const el = cardEl(card, true);
-      el.style.setProperty('--deal-delay', (i * 0.03) + 's');
+      // Only cards that just arrived (the deal, the kitty) animate in.
+      if (!G.shownIds.has(card.id)) el.style.setProperty('--deal-delay', (i * 0.03) + 's');
+      else el.classList.add('settled');
       const playable =
         (G.awaiting === 'play' && G.legalIds.has(card.id)) ||
         G.awaiting === 'discard';
@@ -577,9 +770,17 @@
         el.classList.add('disabled');
       if (G.awaiting === 'discard' && G.discardPicks.has(card.id))
         el.classList.add('selected');
+      if (G.coachIds && G.coachIds.has(card.id)) el.classList.add('coach');
+      if (playable) {
+        el.setAttribute('role', 'button'); el.tabIndex = 0;
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onHandCardClick(card); }
+        });
+      }
       el.addEventListener('click', () => onHandCardClick(card));
       box.appendChild(el);
     });
+    G.shownIds = new Set(cards.map((c) => c.id));
     layoutHand();
   }
 
@@ -593,11 +794,12 @@
     const cards = [...box.querySelectorAll('.card')];
     box.classList.remove('two-rows');
     if (!cards.length) return;
-    const cw = cards[0].offsetWidth || 74;
+    const cw = cards[0].getBoundingClientRect().width || cards[0].offsetWidth || 74;
     const cs = getComputedStyle(box);
     const avail = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     const maxStep = cw * 0.7, MIN_TAP = 21; // px of each card left to tap
-    const stepFor = (n) => (n <= 1 ? cw : Math.min(maxStep, (avail - cw) / (n - 1)));
+    // 3px of slack so sub-pixel rounding never wraps the last card onto its own line.
+    const stepFor = (n) => (n <= 1 ? cw : Math.min(maxStep, (avail - cw - 3) / (n - 1)));
     let rows = 1;
     if (stepFor(cards.length) < MIN_TAP && cards.length > 9) rows = 2;
     const perRow = Math.ceil(cards.length / rows);
@@ -721,13 +923,32 @@
         types[t].classList.toggle('on', sel.type === t);
       }
       bidBtn.disabled = sel.amount === null || !legal(sel.amount, sel.type);
+      explain.innerHTML = sel.amount === null ? '' : bidExplain(sel.amount, sel.type);
     }
+    // Plain-English line: what this bid promises.
+    const top = document.createElement('div');
+    top.className = 'bid-explain';
+    const explain = document.createElement('span');
+    if (coachOn()) top.insertAdjacentHTML('beforeend', `<span class="coach-tip">${coachBidText(mustBid)}</span> `);
+    top.appendChild(explain);
+    bar.insertBefore(top, bar.firstChild);
     refresh();
 
     bidBtn.addEventListener('click', () => {
       if (G.resolve) G.resolve({ amount: sel.amount, type: sel.type });
     });
     passBtn.addEventListener('click', () => { if (G.resolve && !mustBid) G.resolve({ pass: true }); });
+  }
+
+  function bidExplain(a, t) {
+    const R = G.rules;
+    const need = 6 + a;
+    const kind = t === 'notrump' ? 'No-Trump' : t === 'downtown' ? 'Downtown' : 'Uptown';
+    const how = t === 'notrump'
+      ? 'no trump suit, jokers are throw-offs' + (R.noTrumpDoubles ? ', scores double' : '')
+      : t === 'downtown' ? 'low cards win (ace still tops)' : 'high cards win';
+    return `<b>${a} ${kind}</b>: your team needs <b>${need}</b> of 13 books` +
+      (R.kittyIsBook ? ' (the kitty counts as one)' : '') + ` — ${how}. They set you with <b>${8 - a}</b>.`;
   }
 
   function showDeclareSuit() {
@@ -760,6 +981,8 @@
     bar.appendChild(row);
   }
 
+  function kittySize() { return (G.view && G.view.kittySize) || 6; }
+
   function showDiscardBar() {
     const bar = $('action-bar');
     bar.innerHTML = '<div class="action-hint" id="discard-hint"></div>';
@@ -771,9 +994,9 @@
     });
     const done = document.createElement('button');
     done.type = 'button'; done.className = 'btn primary'; done.id = 'btn-discard-done';
-    done.textContent = 'Bury Six';
+    done.textContent = kittySize() === 4 ? 'Bury Four' : 'Bury Six';
     done.addEventListener('click', () => {
-      if (G.discardPicks.size === 6 && G.resolve) G.resolve(null);
+      if (G.discardPicks.size === kittySize() && G.resolve) G.resolve(null);
     });
     bar.appendChild(auto); bar.appendChild(done);
     updateDiscardBar();
@@ -783,18 +1006,13 @@
     const hint = $('discard-hint');
     const done = $('btn-discard-done');
     if (!hint || !done) return;
-    hint.textContent = `The kitty is yours — pick six to bury (${G.discardPicks.size}/6). They count as your first book.`;
-    done.disabled = G.discardPicks.size !== 6;
+    const k = kittySize();
+    hint.textContent = `The kitty is yours — pick ${k === 4 ? 'four' : 'six'} to bury (${G.discardPicks.size}/${k}).` +
+      (G.rules.kittyIsBook ? ' They count as your first book.' : '');
+    done.disabled = G.discardPicks.size !== k;
   }
 
-  // ---- human input plumbing -------------------------------------------------
-
-  function humanInput(kind) {
-    G.awaiting = kind;
-    return new Promise((res) => {
-      G.resolve = (v) => { G.awaiting = null; G.resolve = null; res(v); };
-    });
-  }
+  // ---- your input -----------------------------------------------------------
 
   function onHandCardClick(card) {
     if (G.awaiting === 'play' && G.legalIds.has(card.id)) {
@@ -802,254 +1020,9 @@
       if (G.resolve) G.resolve(chosen);
     } else if (G.awaiting === 'discard') {
       if (G.discardPicks.has(card.id)) G.discardPicks.delete(card.id);
-      else if (G.discardPicks.size < 6) G.discardPicks.add(card.id);
+      else if (G.discardPicks.size < kittySize()) G.discardPicks.add(card.id);
       renderHand(); updateDiscardBar();
     }
-  }
-
-  // ---- game flow ------------------------------------------------------------
-
-  async function startHand() {
-    if (G.nextRules) { G.rules = G.nextRules; G.nextRules = null; }
-    G.handNo++;
-    G.bids = [null, null, null, null];
-    G.high = null; G.highSeat = null; G.plans = {};
-    G.contract = null;
-    G.books = [0, 0];
-    G.memory = new Set();
-    G.discardPicks = new Set();
-    G.handResult = null;
-    G.seatBooks = [0, 0, 0, 0];
-    clearTrick();
-    Sound.play('shuffle');
-
-    const dealt = E.deal(E.shuffle(E.newDeck()));
-    G.hands = dealt.hands; G.kitty = dealt.kitty;
-
-    log(`— Hand ${G.handNo}. <b>${seatName(G.dealer)}</b> deal${G.dealer === 0 ? '' : 's'}. —`, true);
-    renderScores(); renderContractLine(); renderBidChips();
-    renderOppHands(); renderKitty('back'); renderHand();
-    renderPlates(); renderSeatsMeta(null);
-    tableMsg('');
-
-    await wait(600);
-    await runBidding();
-  }
-
-  async function runBidding() {
-    for (let i = 1; i <= 4; i++) {
-      const seat = (G.dealer + i) % 4;
-      const mustBid = G.rules.forcedDealerBid && seat === G.dealer && !G.high;
-      renderSeatsMeta(seat);
-
-      let bid;
-      if (seat === 0) {
-        showBidPanel(mustBid);
-        Sound.play('turn'); Sound.buzz(12);
-        tableMsg(mustBid ? 'The table passed it to you, dealer.' : 'Your call.');
-        bid = await humanInput('bid');
-        tableMsg('');
-        if (!bid.pass) G.plans[0] = { type: bid.type };
-      } else {
-        await wait(850);
-        const res = AI.chooseBid(G.hands[seat], G.high, G.rules, mustBid, Math.random, G.learner, seat);
-        bid = res.bid;
-        if (!bid.pass) G.plans[seat] = res.plan;
-      }
-
-      G.bids[seat] = bid;
-      renderBidChips();
-      if (bid.pass) {
-        log(`${NAMES[seat]} pass${seat === 0 ? '' : 'es'}.`);
-      } else {
-        bid._seat = seat;
-        G.high = bid; G.highSeat = seat;
-        log(`<b>${NAMES[seat]}</b> bid${seat === 0 ? '' : 's'} <b>${E.describeBid(bid)}</b>.`);
-      }
-    }
-    renderSeatsMeta(null);
-
-    if (!G.high) {
-      log('All four pass — cards go in. New deal.', true);
-      actionHint('Thrown in. Dealing again…');
-      G.dealer = (G.dealer + 1) % 4;
-      await wait(1200);
-      return startHand();
-    }
-    await declareAndKitty();
-  }
-
-  async function declareAndKitty() {
-    const seat = G.highSeat;
-    const bid = G.high;
-    actionHint(`${NAMES[seat]} won the auction at ${E.describeBid(bid)}.`);
-
-    if (seat === 0) {
-      let trump = null, direction;
-      if (bid.type === 'notrump') {
-        showDeclareDirection();
-        direction = await humanInput('declare-dir');
-      } else {
-        showDeclareSuit();
-        trump = await humanInput('declare-suit');
-        direction = bid.type;
-      }
-      G.contract = { amount: bid.amount, type: bid.type, trump, direction };
-    } else {
-      await wait(900);
-      const plan = G.plans[seat];
-      G.contract = { amount: bid.amount, type: bid.type, trump: plan.trump, direction: plan.direction };
-    }
-
-    const c = G.contract;
-    log(`<b>${NAMES[seat]}</b> ${c.type === 'notrump'
-      ? 'calls No-Trump, running ' + (c.direction === 'uptown' ? 'uptown' : 'downtown')
-      : 'names <b>' + E.SUIT_NAMES[c.trump] + '</b> trump, ' + c.type}.`, true);
-    renderContractLine();
-    renderBidChips(); // reveal the trump suit on the declarer's chip
-
-    // kitty pickup
-    if (G.rules.sportKitty) {
-      renderKitty('sported');
-      tableMsg(`${NAMES[seat]} sports the kitty.`);
-      await wait(2000);
-      tableMsg('');
-    }
-    if (G.rules.kittyIsBook) G.books[seat % 2]++;
-
-    if (!G.rules.sportKitty) await kittyToSeat(seat);
-    else showBanner('Give me da kitty!', seat === 0 ? '' : '&mdash; ' + seatName(seat), 1500);
-    G.hands[seat] = G.hands[seat].concat(G.kitty);
-    renderKitty('gone');
-
-    if (seat === 0) {
-      G.awaiting = 'discard'; // before render so cards become selectable
-      renderHand();
-      showDiscardBar();
-      await humanInput('discard');
-      G.hands[0] = G.hands[0].filter((card) => !G.discardPicks.has(card.id));
-      G.discardPicks = new Set();
-    } else {
-      await wait(1100);
-      const discards = AI.chooseDiscards(G.hands[seat], G.contract);
-      const ids = new Set(discards.map((card) => card.id));
-      G.hands[seat] = G.hands[seat].filter((card) => !ids.has(card.id));
-      log(`${NAMES[seat]} takes the kitty and buries six.`);
-    }
-
-    renderScores(); renderOppHands(); renderHand();
-    await runPlay();
-  }
-
-  async function runPlay() {
-    let leader = G.highSeat;
-    tableMsg(leader === 0 ? 'You lead.' : NAMES[leader] + ' leads.');
-
-    for (let t = 0; t < 12; t++) {
-      const trick = [];
-      for (let i = 0; i < 4; i++) {
-        const seat = (leader + i) % 4;
-        renderSeatsMeta(seat);
-        let card;
-        if (seat === 0) {
-          const legal = E.legalPlays(G.hands[0], trick, G.contract);
-          G.legalIds = new Set(legal.map((c) => c.id));
-          G.awaiting = 'play'; // before render so illegal cards dim
-          renderHand();
-          Sound.play('turn'); Sound.buzz(12);
-          actionHint(trick.length === 0 ? 'You lead — pick a card.' + (G.contract.type === 'notrump' && G.hands[0].some((c) => c.joker) && legal.length < G.hands[0].length ? ' (Jokers are throw-offs in No-Trump — no leading them.)' : '') : 'Your play.');
-          card = await humanInput('play');
-          G.legalIds = new Set();
-        } else {
-          await wait(seat === 2 ? 800 : 700);
-          card = AI.choosePlay(G.hands[seat], trick, G.contract, seat, G.memory);
-        }
-        G.hands[seat] = G.hands[seat].filter((c) => c.id !== card.id);
-        trick.push({ player: seat, card });
-        G.memory.add(card.id);
-        addPlayedCard(seat, card);
-        if (seat === 0) { renderHand(); actionHint('&nbsp;'); }
-        else renderOppHands();
-        if (trick.length === 1) tableMsg('');
-      }
-
-      const winner = E.trickWinner(trick, G.contract);
-      renderSeatsMeta(null);
-      await wait(950);
-      G.books[winner % 2]++;
-      log(`<b>${NAMES[winner]}</b> take${winner === 0 ? '' : 's'} the book (${E.cardLabel(trick.find((p) => p.player === winner).card)}).`);
-      renderScores(); renderSetMeter();
-      await collectTrick(winner);
-      leader = winner;
-      if (t < 11) tableMsg('');
-    }
-    await endHand();
-  }
-
-  async function endHand() {
-    const bidTeam = G.highSeat % 2;
-    const res = E.scoreHand(G.contract.amount, G.contract, G.books[bidTeam], G.rules);
-    G.scores[bidTeam] += res.delta;
-    renderScores();
-    G.handResult = { highSeat: G.highSeat, made: res.made, delta: res.delta };
-    renderBidChips(); // stamp made/set on the declarer's seat
-
-    const boston = G.books[bidTeam] === 13;
-    const stamp = $('summary-stamp');
-    const isUs = bidTeam === 0;
-    stamp.className = 'stamp ' + (res.made ? 'made' : 'set');
-    stamp.textContent = res.made ? (boston ? 'BOSTON!' : 'BID MADE') : 'SET!';
-
-    $('summary-title').textContent =
-      `${seatName(G.highSeat)} bid ${E.describeBid(G.high)}`;
-    const deltaCls = (isUs ? res.delta >= 0 : res.delta < 0) ? 'pos' : 'neg';
-    const us = myTeam(), them = 1 - us;
-    $('summary-body').innerHTML =
-      `${teamLabel(bidTeam)} took <b>${G.books[bidTeam]}</b> of 13 books` +
-      (G.rules.kittyIsBook ? ' (kitty included)' : '') +
-      ` — needed <b>${res.needed}</b>.` +
-      `<span class="delta ${deltaCls}">${res.delta >= 0 ? '+' : ''}${res.delta} ${teamLabel(bidTeam)}</span>` +
-      `Score: Us <b>${G.scores[us]}</b> · Them <b>${G.scores[them]}</b>`;
-    log(res.made
-      ? `<b>${teamLabel(bidTeam)}</b> make it: ${res.delta >= 0 ? '+' : ''}${res.delta}.`
-      : `<b>${teamLabel(bidTeam)}</b> get set: ${res.delta}.`, true);
-
-    // The table learns from the hand. Calibrate off the AI's own declared hands
-    // (not the human's), and always update the per-seat read on every player.
-    AI.observeHand(G.learner, {
-      declarerSeat: G.highSeat, amount: G.contract.amount, needed: res.needed,
-      bidTeamBooks: G.books[bidTeam], made: res.made,
-      calibrate: G.highSeat !== 0,
-    });
-    maybeShowRead();
-
-    const winner = E.gameOver(G.scores, G.rules);
-    await wait(400);
-    if (winner !== null) return endGame(winner);
-    $('modal-summary').classList.add('show');
-    celebrate('modal-summary', !res.made ? 'set' : boston ? 'boston' : 'made', bidTeam === myTeam());
-  }
-
-  function endGame(winner) {
-    const stamp = $('gameover-stamp');
-    stamp.className = 'stamp ' + (winner === 0 ? 'made' : 'set');
-    stamp.textContent = winner === 0 ? 'GAME' : 'BUSTED';
-    $('gameover-title').textContent = winner === 0
-      ? `${seatName(0)} and ${seatName(2)} take the game!`
-      : `${seatName(1)} and ${seatName(3)} take the game.`;
-    $('gameover-body').innerHTML =
-      `Final score: Us <b>${G.scores[0]}</b> · Them <b>${G.scores[1]}</b> after ${G.handNo} hand${G.handNo > 1 ? 's' : ''}.`;
-    log(winner === 0 ? '<b>Game — Us.</b>' : '<b>Game — Them.</b>', true);
-    $('modal-gameover').classList.add('show');
-    celebrate('modal-gameover', winner === 0 ? 'win' : 'set', true);
-  }
-
-  function newGame() {
-    G.scores = [0, 0];
-    G.handNo = 0;
-    G.dealer = Math.floor(Math.random() * 4);
-    $('log').innerHTML = '';
-    startHand();
   }
 
   // ---- online play ----------------------------------------------------------
@@ -1059,8 +1032,52 @@
 
   const Online = {
     base: '', code: '', name: '', token: null, isHost: false,
-    conn: null, queue: [], draining: false, started: false,
+    conn: null, queue: [], draining: false, started: false, local: false, watching: false,
   };
+
+  // ---- solo -------------------------------------------------------------------
+  // Solo runs the exact same room engine as online play (js/room-core.js), just
+  // in the browser: a local "connection" hands it your moves and feeds its
+  // snapshots back through the same renderer. One game, two transports.
+  function startSolo() {
+    const room = new RoomCore.Room('SOLO', E.cleanRules(G.nextRules || G.rules));
+    G.nextRules = null;
+    room.learner = G.learner; // the table keeps learning across games this session
+    let token = null;
+    const deliver = (obj) => setTimeout(() => onServerMessage(obj), 0);
+    const conn = {
+      local: true, room,
+      send(msg) {
+        let out = null;
+        switch (msg.type) {
+          case 'hello': {
+            const r = room.join(msg.name, msg.avatar); token = r.token;
+            deliver({ type: 'welcome', token, seat: r.seat, host: true });
+            return;
+          }
+          case 'start': out = room.start(token); break;
+          case 'nextHand': out = room.nextHand(token); break;
+          case 'intent': out = room.submit(token, msg.intent); break;
+          case 'profile': out = room.setProfile(token, msg.name, msg.avatar); break;
+          case 'react': out = room.react(token, msg.id); break;
+          case 'rules': out = room.setRules(token, msg.rules); break;
+          case 'renege': out = room.callRenege(token); break;
+          default: return;
+        }
+        if (out && out.error) deliver({ type: 'error', error: out.error });
+        else deliver({ type: 'state', view: room.viewFor(token), events: (out && out.events) || [] });
+      },
+      close() { /* nothing to close */ },
+    };
+    Object.assign(Online, { base: '', code: 'SOLO', isHost: true, queue: [], draining: false, started: false, local: true, watching: false, conn });
+    G.mode = 'local'; G.viewSeat = 0; G.running = true; G.view = null;
+    G.memory = new Set(); G.liveTrick = []; G.seatBooks = [0, 0, 0, 0];
+    $('log').innerHTML = '';
+    for (const id of ['modal-summary', 'modal-gameover']) $(id).classList.remove('show');
+    clearTrick();
+    conn.send({ type: 'hello', name: G.profile.name, avatar: G.profile.avatar });
+    conn.send({ type: 'start' });
+  }
 
   function tokenKey(code) { return 'bidwhist.token.' + code; }
 
@@ -1149,7 +1166,7 @@
   function showServerProblem(msg) { setOnlineError(msg); $('online-advanced').open = true; }
 
   function connectRoom(base, code, isHost) {
-    Object.assign(Online, { base, code, isHost, queue: [], draining: false, started: false });
+    Object.assign(Online, { base, code, isHost, queue: [], draining: false, started: false, local: false, watching: false });
     let saved = null;
     try { saved = localStorage.getItem(tokenKey(code)); } catch (_) { /* ignore */ }
     Online.token = saved;
@@ -1171,8 +1188,9 @@
     if (msg.type === 'welcome') {
       Online.token = msg.token;
       Online.isHost = !!msg.host;
-      try { localStorage.setItem(tokenKey(Online.code), msg.token); } catch (_) { /* ignore */ }
-      G.mode = 'online';
+      Online.watching = !!msg.watcher && !msg.token;
+      if (!Online.local && msg.token) { try { localStorage.setItem(tokenKey(Online.code), msg.token); } catch (_) { /* ignore */ } }
+      G.mode = Online.local ? 'local' : 'online';
       G.viewSeat = msg.seat != null ? msg.seat : 0;
       G.running = true;
       setOnlineError('');
@@ -1183,7 +1201,8 @@
       const human = {
         full: 'That table is full.', 'not-host': 'Only the host can do that.',
         'not-your-turn': 'Hold on — not your turn.', 'illegal-bid': 'That bid isn\'t legal.',
-        'illegal-play': 'You can\'t play that card.',
+        'illegal-play': 'You can\'t play that card.', 'slow-down': 'Easy — one reaction at a time.',
+        'between-hands': 'Rule changes apply between hands.',
       }[msg.error] || ('Server: ' + msg.error);
       if (!Online.started) setOnlineError(human); else tableMsg(human);
       return;
@@ -1199,6 +1218,7 @@
     Online.draining = true;
     while (Online.queue.length) {
       const msg = Online.queue.shift();
+      PACE = Online.local ? PACE_SOLO : PACE_ONLINE;
       G.view = msg.view; // expose the fresh roster so names resolve during animation
       await animateEvents(msg.events || []);
       applyView(msg.view);
@@ -1206,7 +1226,9 @@
     Online.draining = false;
   }
 
-  const PACE = { bid: 480, play: 560, trick: 820 };
+  const PACE_ONLINE = { bid: 480, play: 560, trick: 820 };
+  const PACE_SOLO = { bid: 760, play: 680, trick: 900 };
+  let PACE = PACE_ONLINE;
 
   async function animateEvents(events) {
     for (const ev of events) {
@@ -1215,8 +1237,9 @@
           G.bids = [null, null, null, null];
           G.handResult = null;
           G.dealer = ev.dealer; G.handNo = ev.handNo;
-          G.seatBooks = [0, 0, 0, 0]; G.contract = null;
-          clearTrick(); renderPlateBooks();
+          G.seatBooks = [0, 0, 0, 0]; G.contract = null; G.memory = new Set(); G.lastTrick = null;
+          clearTrick(); renderPlateBooks(); renderTrumpBadge();
+          log(`— Hand ${ev.handNo}. <b>${seatName(ev.dealer)}</b> ${seatVerb(ev.dealer, 'deal')}. —`, true);
           Sound.play('shuffle');
           $('modal-summary').classList.remove('show');
           $('modal-gameover').classList.remove('show');
@@ -1241,8 +1264,8 @@
           const c = ev.contract; G.contract = c; G.highSeat = ev.seat;
           renderContractLine();
           log(`<b>${seatName(ev.seat)}</b> ${c.type === 'notrump'
-            ? 'calls No-Trump, running ' + (c.direction === 'uptown' ? 'uptown' : 'downtown')
-            : 'names <b>' + E.SUIT_NAMES[c.trump] + '</b> trump, ' + c.type}.`, true);
+            ? seatVerb(ev.seat, 'call') + ' No-Trump, running ' + (c.direction === 'uptown' ? 'uptown' : 'downtown')
+            : seatVerb(ev.seat, 'name') + ' <b>' + E.SUIT_NAMES[c.trump] + '</b> trump, ' + c.type}.`, true);
           break;
         }
         case 'kitty':
@@ -1260,17 +1283,58 @@
           tableMsg(ev.seat === G.viewSeat ? 'You lead.' : seatName(ev.seat) + ' leads.');
           break;
         case 'play':
+          G.memory.add(ev.card.id);
           addPlayedCard(ev.seat, ev.card);
           if (ev.seat !== G.viewSeat) { G.hands[ev.seat] && G.hands[ev.seat].pop(); renderOppHands(); }
+          else if (G.hands && G.hands[ev.seat]) {
+            // Your card leaves your hand the moment it's on the felt.
+            G.hands[ev.seat] = G.hands[ev.seat].filter((c) => c.id !== ev.card.id);
+            renderHand();
+          }
           tableMsg('');
           await wait(PACE.play);
           break;
         case 'trick':
           await wait(PACE.trick - PACE.play);
-          log(`<b>${seatName(ev.winner)}</b> ${seatVerb(ev.winner, 'take')} the book.`);
+          {
+            const w = (ev.cards || []).find((p) => p.player === ev.winner);
+            log(`<b>${seatName(ev.winner)}</b> ${seatVerb(ev.winner, 'take')} the book` + (w ? ` (${E.cardLabel(w.card)}).` : '.'));
+            G.lastTrick = { cards: (ev.cards || []).map((p) => ({ seat: p.player, card: p.card })), winner: ev.winner };
+          }
           await collectTrick(ev.winner);
           break;
+        case 'discard':
+          if (ev.seat !== G.viewSeat) log(`${seatName(ev.seat)} takes the kitty and buries ${kittySize() === 4 ? 'four' : 'six'}.`);
+          break;
+        case 'react':
+          showReaction(ev.seat, ev.id);
+          break;
+        case 'renege':
+          if (ev.ok) {
+            const msg = `${seatName(ev.caller)} ${ev.atCount ? 'caught' : seatVerb(ev.caller, 'call')} a renege on ${seatName(ev.offender)}` +
+              (ev.atCount ? ' at the count' : '') + ` — ${ev.books} books go to ${teamLabel(ev.caller % 2)}.`;
+            log(`<b>${msg}</b>`, true);
+            showBanner('Renege!', `${seatName(ev.offender)} &mdash; ${ev.books} books`, 1900);
+            Sound.play('set');
+          } else {
+            log(`${seatName(ev.caller)} ${seatVerb(ev.caller, 'call')} renege — no renege found. Play on.`);
+          }
+          await wait(500);
+          break;
+        case 'timeout':
+          log(`${seatName(ev.seat)} ran out of time — the computer moved for ${ev.seat === G.viewSeat ? 'you' : 'them'}.`);
+          break;
+        case 'sitIn':
+          log(`<b>${ev.name}</b> sat down at the table.`, true);
+          break;
+        case 'rules':
+          log('Table rules updated for the next hand.', true);
+          break;
         case 'handend':
+          if (Online.local) {
+            maybeShowRead();
+            if (ev.result.boston && ev.result.bidTeam === myTeam()) noteSoloBoston();
+          }
           G.handResult = { highSeat: ev.result.highSeat, made: ev.result.made, delta: ev.result.delta };
           renderBidChips();
           showOnlineSummary(ev.result);
@@ -1283,12 +1347,32 @@
           log(`<b>${ev.name || 'A player'}</b> left the table — a bot takes the seat.`, true);
           break;
         case 'gameover':
+          if (Online.local) noteSoloGame(ev.winner === myTeam());
           showOnlineGameover(ev.winner, ev.scores);
           await wait(200);
           break;
         default: break;
       }
     }
+  }
+
+  // Turn timer (online, host's choice): a countdown on the player who's up.
+  let clockTimer = null;
+  function startTurnClock(view) {
+    clearInterval(clockTimer); clockTimer = null;
+    document.querySelectorAll('.np-timer').forEach((x) => x.remove());
+    if (view.turnMsLeft == null || view.turn == null) return;
+    const end = Date.now() + view.turnMsLeft;
+    const plate = $('plate-' + slot(view.turn)); if (!plate) return;
+    const t = document.createElement('span'); t.className = 'np-timer'; plate.appendChild(t);
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+      t.textContent = left + 's';
+      t.classList.toggle('low', left <= 10);
+      if (left === 10 && view.turn === G.viewSeat) { Sound.play('turn'); announce('Ten seconds left.'); }
+      if (left <= 0) { clearInterval(clockTimer); clockTimer = null; }
+    };
+    tick(); clockTimer = setInterval(tick, 1000);
   }
 
   function applyView(view) {
@@ -1312,8 +1396,10 @@
       const arr = []; for (let i = 0; i < n; i++) arr.push({ id: 'b' + s + '_' + i, back: true });
       return arr;
     });
-    G.kitty = new Array(6).fill(null);
+    G.kitty = new Array(view.kittySize || 6).fill(null);
+    G.lastTrick = view.lastTrick || G.lastTrick;
 
+    Online.watching = !!view.watching && !view.you;
     if (view.phase === 'lobby') {
       $('modal-summary').classList.remove('show');
       $('modal-gameover').classList.remove('show');
@@ -1326,8 +1412,10 @@
     $('modal-online').classList.remove('show');
     $('modal-lobby').classList.remove('show');
 
-    renderScores(); renderContractLine(); renderPlates();
+    Online.watching = !!view.watching && !view.you;
+    renderScores(); renderContractLine(); renderPlates(); renderRecordLine();
     renderOppHands(); renderBidChips(); renderSeatsMeta(view.turn);
+    startTurnClock(view);
     // The pile stays on the felt until the high bidder actually takes it.
     renderKitty(view.phase === 'bidding' || view.phase === 'declare' ? 'back' : 'gone');
     renderHand();
@@ -1336,6 +1424,20 @@
 
   function setupTurn(view) {
     const mine = view.you && view.turn === view.you.seat && view.need;
+    G.coachIds = null;
+    if (Online.watching) {
+      G.awaiting = null; G.resolve = null; G.legalIds = new Set();
+      renderHand();
+      const open = view.seats.some((x) => x.kind === 'empty' || x.kind === 'ai');
+      actionHint(`You're watching${view.turn != null ? ` — <b>${seatName(view.turn)}</b> is up` : ''}.`);
+      if (open) {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'btn primary'; b.textContent = 'Take a seat';
+        b.addEventListener('click', () => Online.conn && Online.conn.send({ type: 'sit' }));
+        $('action-bar').appendChild(b);
+      }
+      return;
+    }
     if (!mine) {
       G.awaiting = null; G.resolve = null; G.legalIds = new Set();
       renderHand();
@@ -1348,6 +1450,8 @@
     if (Online.lastCue !== view.need + ':' + view.handNo + ':' + (view.counts || []).join(',')) {
       Online.lastCue = view.need + ':' + view.handNo + ':' + (view.counts || []).join(',');
       if (view.need === 'bid' || view.need === 'play') { Sound.play('turn'); Sound.buzz(12); }
+      announce({ bid: 'Your turn to bid.', play: 'Your turn to play.', discard: 'Pick cards to bury.',
+        'declare-suit': 'Name your trump.', 'declare-dir': 'Pick uptown or downtown.' }[view.need] || 'Your turn.');
     }
     const send = (intent) => {
       if (G._sent) return;
@@ -1362,21 +1466,45 @@
     } else if (view.need === 'declare-suit') {
       G.resolve = (suit) => send({ type: 'declare', trump: suit });
       showDeclareSuit();
+      if (coachOn()) {
+        const p = AI.bestPlan(myHand());
+        const best = E.SUITS.slice().sort((a, b) => AI.evalTrump(myHand(), b, G.high.type) - AI.evalTrump(myHand(), a, G.high.type))[0];
+        void p;
+        coachLine(`Coach: name <b>${E.SUIT_GLYPHS[best]} ${E.SUIT_NAMES[best]}</b> — it's your strongest ${G.high.type} suit.`);
+      }
     } else if (view.need === 'declare-dir') {
       G.resolve = (dir) => send({ type: 'declare', direction: dir });
       showDeclareDirection();
+      if (coachOn()) {
+        const up = AI.evalNoTrump(myHand(), 'uptown'), down = AI.evalNoTrump(myHand(), 'downtown');
+        coachLine(`Coach: run it <b>${up >= down ? 'Uptown' : 'Downtown'}</b> — your ${up >= down ? 'high' : 'low'} cards are stronger.`);
+      }
     } else if (view.need === 'discard') {
       G.awaiting = 'discard'; G.discardPicks = new Set();
       G.resolve = () => send({ type: 'discard', cardIds: [...G.discardPicks] });
+      if (coachOn()) G.coachIds = new Set(AI.chooseDiscards(myHand(), G.contract).map((c) => c.id));
       renderHand(); showDiscardBar();
+      if (coachOn()) coachLine("Coach: the outlined cards are the ones I'd bury.");
     } else if (view.need === 'play') {
       G.awaiting = 'play';
       G.legalIds = new Set(view.you.legalIds || []);
       G.resolve = (card) => send({ type: 'play', cardId: card.id });
       const ntJokerHold = G.contract && G.contract.type === 'notrump' && !(view.trick && view.trick.length) &&
-        G.hands[0].some((c) => c.joker && !G.legalIds.has(c.id));
+        myHand().some((c) => c.joker && !G.legalIds.has(c.id));
+      let tip = '';
+      if (coachOn()) {
+        const s2 = coachPlay(view);
+        G.coachIds = new Set([s2.card.id]);
+        tip = `Coach: ${E.cardLabel(s2.card)} — ${s2.why}.`;
+      }
       renderHand(); actionHint('Your play.' + (ntJokerHold ? ' (Jokers are throw-offs in No-Trump — no leading them.)' : ''));
+      if (tip) coachLine(tip);
     }
+  }
+
+  function coachLine(html) {
+    const d = document.createElement('div'); d.className = 'coach-tip'; d.innerHTML = html;
+    $('action-bar').insertBefore(d, $('action-bar').firstChild);
   }
 
   // Lobby: two team cards. Picking a team picks your partner; the first player
@@ -1494,7 +1622,14 @@
       box.appendChild(card);
     }
     $('btn-start-online').style.display = view.hostToken ? '' : 'none';
-    $('lobby-wait').style.display = view.hostToken ? 'none' : '';
+    $('lobby-wait').style.display = view.hostToken || Online.watching ? 'none' : '';
+    const canSit = Online.watching && view.seats.some((x) => x.kind === 'empty' || x.kind === 'ai');
+    $('btn-sit').hidden = !canSit;
+    if (Online.watching) {
+      $('teams-hint').textContent = canSit ? 'You\'re watching. Grab the open seat — or keep watching.'
+        : 'The table\'s full — you\'re watching. You can take a seat if one opens.';
+    }
+    $('lobby-watchers').textContent = view.watchers ? `${view.watchers} watching` : '';
     $('modal-online').classList.remove('show');
     $('splash').classList.remove('show');
     $('modal-lobby').classList.add('show');
@@ -1513,8 +1648,10 @@
       `<span class="delta ${deltaCls}">${r.delta >= 0 ? '+' : ''}${r.delta} ${teamLabel(bidTeam)}</span>` +
       `Score: ${teamLabel(us)} <b>${r.scores[us]}</b> · ${teamLabel(them)} <b>${r.scores[them]}</b>`;
     const btn = $('btn-next-hand');
-    btn.textContent = amHost() ? 'Deal Next Hand' : 'Waiting for host…';
+    btn.textContent = Online.local ? 'Next Hand' : amHost() ? 'Deal Next Hand' : 'Waiting for host…';
     btn.disabled = !amHost();
+    if (r.penalties && r.penalties.length)
+      $('summary-body').insertAdjacentHTML('afterbegin', `<span class="renege-note">Renege penalty: ${r.penalties.map((p) => `${seatName(p.seat)} −${p.books}`).join(', ')} books</span>`);
     const wasOpen = $('modal-summary').classList.contains('show');
     $('modal-summary').classList.add('show');
     if (!wasOpen) celebrate('modal-summary', !r.made ? 'set' : r.boston ? 'boston' : 'made', bidTeam === myTeam());
@@ -1526,12 +1663,12 @@
     const stamp = $('gameover-stamp');
     stamp.className = 'stamp ' + (iWon ? 'made' : 'set');
     stamp.textContent = iWon ? 'GAME' : 'BUSTED';
-    $('gameover-title').textContent = iWon ? `${teamLabel(us)} take the game!` : `${teamLabel(1 - us)} take the game.`;
-    $('gameover-body').innerHTML = `Final: ${teamLabel(us)} <b>${scores[us]}</b> · ${teamLabel(1 - us)} <b>${scores[1 - us]}</b>.`;
+    $('gameover-title').textContent = iWon ? `${teamNames(us)} take the game!` : `${teamNames(1 - us)} take the game.`;
+    $('gameover-body').innerHTML = `Final: ${teamLabel(us)} <b>${scores[us]}</b> · ${teamLabel(1 - us)} <b>${scores[1 - us]}</b>.` + recordHtml();
     const btn = $('btn-rematch');
     btn.textContent = amHost() ? 'Run It Back' : 'Waiting for host…';
     btn.disabled = !amHost();
-    $('btn-to-lobby').hidden = !amHost();
+    $('btn-to-lobby').hidden = Online.local || !amHost();
     const wasOpen = $('modal-gameover').classList.contains('show');
     $('modal-gameover').classList.add('show');
     if (!wasOpen) celebrate('modal-gameover', iWon ? 'win' : 'set', true);
@@ -1564,62 +1701,75 @@
     renderPlates();
     renderOnlineProfile();
     renderSplashProfile();
-    if (G.mode === 'online' && Online.conn) Online.conn.send({ type: 'profile', name, avatar });
+    if (Online.conn) Online.conn.send({ type: 'profile', name, avatar });
   }
 
   // ---- settings -------------------------------------------------------------
 
+  const RULE_CHECKS = ['noTrumpDoubles', 'kittyIsBook', 'forcedDealerBid', 'sportKitty', 'bostonDoubles', 'noJokers', 'ntMinFour', 'renege'];
+
+  // Online, only the host edits the rules (everyone sees them).
+  function rulesLocked() { return G.mode === 'online' && !amHost(); }
+
   function settingsToForm() {
     const f = $('settings-form');
-    const r = G.nextRules || G.rules;
+    const r = E.cleanRules(G.nextRules || (G.view && G.mode === 'online' && G.view.rules) || G.rules);
     f.minBid.value = String(r.minBid);
     f.gameTarget.value = String(r.gameTarget);
-    for (const k of ['noTrumpDoubles', 'kittyIsBook', 'forcedDealerBid', 'sportKitty', 'bostonDoubles'])
-      f[k].checked = !!r[k];
+    for (const k of RULE_CHECKS) f[k].checked = !!r[k];
+    f.leadRule.value = r.leadRule;
+    f.aiLevel.value = r.aiLevel;
+    f.turnTimer.value = String(r.turnTimer);
+    const locked = rulesLocked();
+    for (const el of f.elements) el.disabled = locked;
+    $('rules-lock').hidden = !locked;
+    for (const el of document.querySelectorAll('.online-only')) el.hidden = G.mode !== 'online';
   }
 
   function formToSettings() {
+    if (rulesLocked()) return;
     const f = $('settings-form');
-    const r = {
+    const r = E.cleanRules({
       minBid: parseInt(f.minBid.value, 10),
       gameTarget: parseInt(f.gameTarget.value, 10),
-      noTrumpDoubles: f.noTrumpDoubles.checked,
-      kittyIsBook: f.kittyIsBook.checked,
-      forcedDealerBid: f.forcedDealerBid.checked,
-      sportKitty: f.sportKitty.checked,
-      bostonDoubles: f.bostonDoubles.checked,
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(r));
-    if (G.running) G.nextRules = r; else G.rules = r;
-    renderScores();
+      leadRule: f.leadRule.value, aiLevel: f.aiLevel.value,
+      turnTimer: parseInt(f.turnTimer.value, 10),
+      ...Object.fromEntries(RULE_CHECKS.map((k) => [k, f[k].checked])),
+    });
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(r)); } catch (_) { /* ignore */ }
+    if (!Online.conn) { G.rules = r; renderScores(); return; }
+    // Rules change between hands: now if we're between hands, else at the next deal.
+    const between = G.view && ['lobby', 'handover', 'gameover'].includes(G.view.phase);
+    if (between) { Online.conn.send({ type: 'rules', rules: r }); G.nextRules = null; }
+    else { G.nextRules = r; log('Rule changes will apply from the next hand.', true); }
   }
 
   // ---- wiring ---------------------------------------------------------------
 
   $('btn-deal-in').addEventListener('click', () => {
     $('splash').classList.remove('show');
-    G.mode = 'local'; G.viewSeat = 0; G.running = true;
-    startHand();
+    startSolo();
   });
+  // Rule edits made mid-hand go to the table just before the next deal.
+  function flushRules() {
+    if (G.nextRules && Online.conn && amHost()) { Online.conn.send({ type: 'rules', rules: G.nextRules }); G.nextRules = null; }
+  }
   $('btn-next-hand').addEventListener('click', () => {
     $('modal-summary').classList.remove('show');
-    if (G.mode === 'online') { if (amHost()) Online.conn.send({ type: 'nextHand' }); return; }
-    G.dealer = (G.dealer + 1) % 4;
-    startHand();
+    if (Online.conn && amHost()) { flushRules(); Online.conn.send({ type: 'nextHand' }); }
   });
   $('btn-to-lobby').addEventListener('click', () => {
     $('modal-gameover').classList.remove('show');
-    if (G.mode === 'online' && amHost()) Online.conn.send({ type: 'toLobby' });
+    if (G.mode === 'online' && amHost()) { flushRules(); Online.conn.send({ type: 'toLobby' }); }
   });
   $('btn-rematch').addEventListener('click', () => {
     $('modal-gameover').classList.remove('show');
-    if (G.mode === 'online') { if (amHost()) Online.conn.send({ type: 'start' }); return; }
-    newGame();
+    if (Online.conn && amHost()) { flushRules(); Online.conn.send({ type: 'start' }); }
   });
   $('btn-new-game').addEventListener('click', () => {
     if (!G.running) return;
     if (G.mode === 'online') { location.reload(); return; }
-    if (confirm('Start a fresh game? Current scores will be wiped.')) newGame();
+    if (confirm('Start a fresh game? Current scores will be wiped.')) startSolo();
   });
 
   // Online setup + lobby wiring.
@@ -1684,11 +1834,42 @@
       b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
     }
     $('pref-sound').checked = Sound.on;
+    $('pref-coach').checked = coachOn();
+    $('pref-big').checked = document.documentElement.getAttribute('data-cards') === 'big';
+    $('pref-four').checked = document.documentElement.getAttribute('data-deck') === 'four';
     const sb = $('btn-sound');
     sb.textContent = Sound.on ? 'Sound On' : 'Sound Off';
     sb.setAttribute('aria-pressed', String(Sound.on));
   }
   for (const b of document.querySelectorAll('.felt-pick')) b.addEventListener('click', () => setFelt(b.dataset.felt));
+  const prefToggle = (id, key, attr, val) => $(id).addEventListener('change', (e) => {
+    try { localStorage.setItem(key, e.target.checked ? 'on' : 'off'); } catch (_) { /* ignore */ }
+    if (attr) {
+      if (e.target.checked) document.documentElement.setAttribute(attr, val);
+      else document.documentElement.removeAttribute(attr);
+    }
+    renderHand();
+    if (G.view && !Online.watching) setupTurn(G.view); // refresh coach marks
+  });
+  prefToggle('pref-coach', 'bidwhist.coach', null);
+  prefToggle('pref-big', 'bidwhist.bigCards', 'data-cards', 'big');
+  prefToggle('pref-four', 'bidwhist.fourColor', 'data-deck', 'four');
+
+  // Table tools.
+  buildReactMenu();
+  $('btn-react').addEventListener('click', (e) => { e.stopPropagation(); toggleReactMenu(); });
+  document.addEventListener('click', (e) => { if (!e.target.closest('#table-tools')) toggleReactMenu(false); });
+  $('btn-last-book').addEventListener('click', showLastBook);
+  $('btn-lastbook-done').addEventListener('click', () => $('modal-lastbook').classList.remove('show'));
+  $('btn-renege').addEventListener('click', () => {
+    if (Online.conn && confirm('Call a renege on the other team? If nobody reneged, play just goes on.')) Online.conn.send({ type: 'renege' });
+  });
+  $('btn-sit').addEventListener('click', () => Online.conn && Online.conn.send({ type: 'sit' }));
+
+  // Installable + offline solo: cache the app with a service worker.
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => { /* optional */ }));
+  }
   $('pref-sound').addEventListener('change', (e) => { Sound.set(e.target.checked); renderPrefs(); if (Sound.on) Sound.play('card'); });
   $('btn-sound').addEventListener('click', () => { Sound.set(!Sound.on); renderPrefs(); if (Sound.on) Sound.play('card'); });
   renderPrefs();
@@ -1719,6 +1900,7 @@
   $('btn-howto-done').addEventListener('click', () => $('modal-howto').classList.remove('show'));
 
   renderScores();
+  renderTools();
   renderPlates(); // show the profile + AI avatars before the first deal
   renderSplashProfile();
   actionHint('Waiting on the deal…');

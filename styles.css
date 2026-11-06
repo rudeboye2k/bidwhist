@@ -617,7 +617,7 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
    bar stays on screen. */
 @media (min-width: 761px) and (min-height: 501px) and (max-height: 900px) {
   :root { --card-w: 64px; --card-h: 90px; }
-  .table { height: clamp(460px, calc(100vh - 275px), 640px); height: clamp(460px, calc(100dvh - 275px), 640px); }
+  .table { height: clamp(440px, calc(100vh - 300px), 640px); height: clamp(440px, calc(100dvh - 300px), 640px); }
   .card .pip { font-size: 28px; }
   .trick .played { top: 48%; }
 }
@@ -1118,4 +1118,170 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
   .kitty.taking.to-2 { transform: translate(-50%, calc(-50% - 120px)) scale(.6); }
   .kitty.taking.to-3 { transform: translate(calc(-50% + 200px), -50%) scale(.6); }
   .kitty.taking.to-0 { transform: translate(-50%, 110px) scale(.6); }
+}
+
+/* =====================================================================
+   TABLE TOOLS — trump badge, last book, renege, reactions, coach,
+   spectators, timers, records, readability options
+   ===================================================================== */
+
+.table-tools {
+  position: absolute; left: 26px; top: 24px; z-index: 14;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 7px; max-width: 46%;
+}
+.trump-badge {
+  display: flex; align-items: center; gap: 9px; padding: 6px 13px 6px 7px;
+  background: rgba(16, 12, 9, .82); border: 1px solid rgba(212, 169, 78, .55); border-radius: 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .45); animation: badgeIn .45s cubic-bezier(.2, 1.3, .4, 1) both;
+}
+.trump-badge[hidden] { display: none; }
+.tb-glyph {
+  width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
+  background: linear-gradient(160deg, #fbf6e8, var(--cream) 60%, #eadfc4); border: 1px solid #b9ad8d;
+  font-family: var(--font-display); font-size: 24px; line-height: 1; color: var(--ink);
+}
+.tb-glyph.red { color: var(--red); }
+.tb-glyph.nt { font-size: 13px; font-weight: 800; letter-spacing: .04em; color: var(--burgundy); }
+.tb-text { display: flex; flex-direction: column; line-height: 1.15; }
+.tb-text b { font-family: var(--font-display); font-size: 15px; color: var(--gold-bright); white-space: nowrap; }
+.tb-text small { font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--cream-dim); white-space: nowrap; }
+@keyframes badgeIn { from { opacity: 0; transform: scale(.7); } }
+.tool-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.tool-btn {
+  font-family: var(--font-body); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--gold-bright); background: rgba(16, 12, 9, .78); border: 1px solid rgba(212, 169, 78, .45);
+  border-radius: 999px; padding: 6px 11px; cursor: pointer; min-height: 30px;
+}
+.tool-btn[hidden] { display: none; }
+.tool-btn.react { font-size: 15px; padding: 3px 10px; letter-spacing: 0; }
+.tool-btn.warn { color: #ffb4a6; border-color: rgba(224, 112, 95, .6); }
+@media (hover: hover) and (pointer: fine) { .tool-btn:hover { border-color: var(--gold-bright); } }
+.react-menu {
+  display: grid; grid-template-columns: repeat(2, auto); gap: 5px; padding: 8px; max-width: 290px;
+  background: #2a1511; border: 1px solid rgba(212, 169, 78, .45); border-radius: 14px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .6);
+}
+.react-menu[hidden] { display: none; }
+.react-opt {
+  font-family: var(--font-display); font-style: italic; font-size: 13.5px; color: var(--cream);
+  background: rgba(0, 0, 0, .3); border: 1px solid rgba(212, 169, 78, .25); border-radius: 10px;
+  padding: 7px 9px; cursor: pointer; text-align: left; white-space: nowrap;
+}
+.react-opt.emoji { font-style: normal; font-size: 20px; text-align: center; padding: 4px; }
+.react-opt:hover, .react-opt:focus-visible { border-color: var(--gold-bright); outline: none; }
+.react-bubble {
+  position: absolute; left: 50%; bottom: calc(100% + 6px); z-index: 25; transform: translateX(-50%);
+  background: var(--cream); color: var(--ink); border-radius: 14px; padding: 7px 12px;
+  font-family: var(--font-display); font-style: italic; font-weight: 700; font-size: 15px; white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .55); pointer-events: none;
+  animation: bubble 2.8s ease both;
+}
+.react-bubble::after {
+  content: ""; position: absolute; left: 50%; top: 100%; margin-left: -7px;
+  border: 7px solid transparent; border-top-color: var(--cream);
+}
+.react-bubble.emoji { font-size: 28px; font-style: normal; padding: 3px 10px; }
+.seat-west .react-bubble, .seat-east .react-bubble { bottom: auto; top: -46px; }
+.seat-south .react-bubble { bottom: auto; top: -48px; }
+@keyframes bubble {
+  0% { opacity: 0; transform: translate(-50%, 8px) scale(.6); }
+  10% { opacity: 1; transform: translate(-50%, 0) scale(1.05); }
+  16% { transform: translate(-50%, 0) scale(1); }
+  85% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -8px); }
+}
+
+/* trump cards in your hand get a gold edge */
+.hand .card.trump { box-shadow: inset 0 0 0 2px rgba(212, 169, 78, .9), 0 3px 8px rgba(0, 0, 0, .4); }
+.hand .card.trump.selected { box-shadow: inset 0 0 0 2px rgba(212, 169, 78, .9), 0 0 0 2px var(--gold-bright), 0 12px 22px rgba(0,0,0,.55); }
+/* coach's pick */
+.hand .card.coach { outline: 2px dashed #8fd9ff; outline-offset: 2px; }
+.hand .card:focus-visible { outline: 3px solid var(--gold-bright); outline-offset: 2px; transform: translateY(-10px); z-index: 6; }
+.coach-tip, .bid-explain {
+  flex-basis: 100%; text-align: center; font-size: 12.5px; line-height: 1.45; color: var(--cream-dim);
+}
+.coach-tip { color: #a9e3ff; font-style: italic; }
+.coach-tip b, .bid-explain b { color: var(--cream); }
+
+/* last book */
+.lastbook { position: relative; height: 250px; margin: 6px auto 8px; max-width: 320px; }
+.lb-spot { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.lb-spot.at-0 { left: 50%; bottom: 0; transform: translateX(-50%); }
+.lb-spot.at-2 { left: 50%; top: 0; transform: translateX(-50%); }
+.lb-spot.at-1 { left: 4%; top: 50%; transform: translateY(-50%); }
+.lb-spot.at-3 { right: 4%; top: 50%; transform: translateY(-50%); }
+.lb-spot .card { width: 58px; height: 82px; }
+.lb-spot .card .pip { font-size: 27px; }
+.lb-spot.won .card { box-shadow: 0 0 0 2px var(--gold-bright), 0 0 18px 4px rgba(240, 205, 120, .5); }
+.lb-name { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--cream-dim); }
+.lb-spot.won .lb-name { color: var(--gold-bright); }
+
+/* turn timer */
+.np-timer {
+  position: absolute; left: -8px; top: -8px; z-index: 3; min-width: 24px; height: 22px; padding: 0 5px;
+  border-radius: 11px; display: grid; place-items: center; font-size: 11px; font-weight: 800;
+  background: #2a1511; color: var(--cream); border: 1px solid var(--gold-dim);
+}
+.np-timer.low { background: #7a2a22; border-color: var(--bad); animation: bump .5s ease infinite alternate; }
+
+/* records */
+.sb-record { font-size: 11.5px; color: var(--cream-dim); padding: 0 0 8px; }
+.sb-record:empty { display: none; }
+.sb-record b { color: var(--cream); }
+.record { margin-top: 14px; padding: 12px; border-radius: 12px; background: rgba(0, 0, 0, .25); border: 1px solid rgba(212, 169, 78, .2); text-align: left; font-size: 13px; line-height: 1.6; }
+.record h3 { font-family: var(--font-display); font-size: 14px; color: var(--gold-bright); margin-bottom: 4px; }
+.record .lifetime { color: var(--gold-bright); }
+.renege-note { display: block; color: var(--bad); font-weight: 600; margin-bottom: 6px; }
+
+/* settings additions */
+.settings .settings-sub { margin: 8px 0 0; }
+.rules-lock { font-size: 12px; font-style: italic; color: var(--gold-bright); }
+.prefs { display: flex; flex-direction: column; gap: 8px; text-align: left; margin-bottom: 20px; }
+.setting select { max-width: 60%; }
+#lobby-watchers:empty { display: none; }
+#btn-sit { margin: 4px 0 10px; }
+
+/* four-color deck: blue diamonds, green clubs */
+:root[data-deck="four"] .card.suit-D, :root[data-deck="four"] .tb-glyph.suit-D { color: #1f5fbf; }
+:root[data-deck="four"] .card.suit-C, :root[data-deck="four"] .tb-glyph.suit-C { color: #1f7a3a; }
+/* bigger cards in your hand */
+:root[data-cards="big"] .hand .card { width: calc(var(--card-w) * 1.22); height: calc(var(--card-h) * 1.22); }
+:root[data-cards="big"] .hand .card .idx { font-size: 1.15em; }
+:root[data-cards="big"] .hand .card .pip { transform: scale(1.2); }
+:root[data-cards="big"] .hand { min-height: calc(var(--card-h) * 1.22 + 26px); }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* phones: tools stack on the left of the felt, between the opponents and your hand */
+@media (max-width: 600px) {
+  .table-tools { left: 8px; top: max(122px, 33%); max-width: 112px; gap: 5px; }
+  .tool-row { flex-direction: column; align-items: flex-start; gap: 5px; }
+  .trump-badge { padding: 4px 9px 4px 4px; gap: 6px; border-radius: 11px; }
+  .tb-glyph { width: 26px; height: 26px; font-size: 18px; border-radius: 7px; }
+  .tb-text b { font-size: 12.5px; }
+  .tb-text small, .tb-word { display: none; }
+  .tool-btn { font-size: 10px; padding: 5px 9px; min-height: 28px; }
+  .react-menu { position: absolute; top: 0; left: calc(100% + 4px); width: 236px; max-width: none; z-index: 30; }
+  .react-opt { font-size: 12.5px; padding: 6px 8px; }
+  .react-bubble { font-size: 12.5px; padding: 5px 9px; }
+  .seat:not(.seat-south) .react-bubble { top: calc(100% + 4px); bottom: auto; }
+  .seat:not(.seat-south) .react-bubble::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: var(--cream); }
+  .lastbook { height: 220px; }
+  :root[data-cards="big"] .seat-south .hand { min-height: calc(var(--card-h) * 1.22 + 12px); }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .table-tools { left: 10px; top: 8px; gap: 4px; }
+  .trump-badge { padding: 3px 8px 3px 4px; gap: 6px; }
+  .tb-glyph { width: 22px; height: 22px; font-size: 15px; }
+  .tb-text b { font-size: 11.5px; }
+  .tb-text small { display: none; }
+  .tool-btn { font-size: 9.5px; padding: 4px 8px; min-height: 26px; }
+  .react-menu { grid-template-columns: repeat(3, auto); }
+}
+.hand .card.settled { animation: none; }
+
+.bid-explain .coach-tip { display: inline; flex-basis: auto; }
+@media (max-height: 900px) {
+  .action-bar { row-gap: 6px; padding-top: 10px; padding-bottom: 10px; }
+  .bid-group .lbl { display: none; }
 }

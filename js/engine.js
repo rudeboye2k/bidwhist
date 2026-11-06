@@ -28,15 +28,43 @@
     forcedDealerBid: true,// if the first three pass, dealer must bid the minimum
     sportKitty: false,    // kitty is exposed to the whole table when picked up
     bostonDoubles: false, // a made 7-bid (Boston) scores double
+    noJokers: false,      // play with 52 cards: 12 each and a 4-card kitty
+    ntMinFour: false,     // a No-Trump bid must be at least 4
+    leadRule: 'bidder',   // who leads the first book: 'bidder' or 'left' (of the dealer)
+    renege: false,        // follow-suit isn't enforced; a renege can be called (3-book penalty)
+    aiLevel: 'regular',   // computer players: 'easy' | 'regular' | 'sharp'
+    turnTimer: 0,         // online: seconds before a bot plays an idle player's turn (0 = off)
   };
+
+  // Quick reactions players can pop over their seat (online and solo). Index
+  // is the wire format — append only.
+  const REACTIONS = [
+    'Run a Boston!', "Set 'em!", 'Partner! 😩', 'Who dealt this?', 'Give me da kitty!',
+    'Nice book!', 'Too slow!', 'Uh-oh…', '😂', '🔥', '😤', '👏', '🙌', '😱',
+  ];
+
+  // Accept only known rule values (rules travel over the wire from the host).
+  function cleanRules(r) {
+    const d = DEFAULT_RULES, o = {};
+    r = r || {};
+    o.minBid = r.minBid === 4 ? 4 : 3;
+    o.gameTarget = [5, 7, 9, 11, 21].includes(r.gameTarget) ? r.gameTarget : d.gameTarget;
+    for (const k of ['noTrumpDoubles', 'kittyIsBook', 'forcedDealerBid', 'sportKitty', 'bostonDoubles', 'noJokers', 'ntMinFour', 'renege'])
+      o[k] = typeof r[k] === 'boolean' ? r[k] : d[k];
+    o.leadRule = r.leadRule === 'left' ? 'left' : 'bidder';
+    o.aiLevel = ['easy', 'regular', 'sharp'].includes(r.aiLevel) ? r.aiLevel : 'regular';
+    o.turnTimer = [0, 20, 30, 45, 60].includes(r.turnTimer) ? r.turnTimer : 0;
+    return o;
+  }
 
   // ---- deck -----------------------------------------------------------------
 
-  function newDeck() {
+  function newDeck(rules) {
     const deck = [];
     for (const suit of SUITS)
       for (let rank = 2; rank <= 14; rank++)
         deck.push({ id: suit + rank, suit, rank, joker: null });
+    if (rules && rules.noJokers) return deck;
     deck.push({ id: 'JB', suit: 'J', rank: 0, joker: 'big' });
     deck.push({ id: 'JL', suit: 'J', rank: 0, joker: 'little' });
     return deck;
@@ -54,9 +82,9 @@
 
   function deal(deck) {
     const hands = [[], [], [], []];
-    // 12 cards each, 6 to the kitty. Order is irrelevant once shuffled.
+    // 12 cards each; the rest is the kitty (6 with jokers, 4 without).
     for (let i = 0; i < 48; i++) hands[i % 4].push(deck[i]);
-    return { hands, kitty: deck.slice(48, 54) };
+    return { hands, kitty: deck.slice(48) };
   }
 
   // ---- bidding --------------------------------------------------------------
@@ -73,6 +101,7 @@
     rules = rules || DEFAULT_RULES;
     if (bid.pass) return true;
     if (bid.amount < rules.minBid || bid.amount > 7) return false;
+    if (bid.type === 'notrump' && rules.ntMinFour && bid.amount < 4) return false;
     return bidValue(bid) > bidValue(currentHigh);
   }
 
@@ -143,6 +172,20 @@
     return follow.length ? follow : hand.slice();
   }
 
+  // Cards a player may actually put down. Normally that's legalPlays. Under
+  // the renege house rule, follow-suit isn't enforced (a renege can be called
+  // instead) — but No-Trump jokers still can't be led.
+  function allowedPlays(hand, trick, contract, rules) {
+    if (!(rules && rules.renege) || trick.length === 0) return legalPlays(hand, trick, contract);
+    return hand.slice();
+  }
+
+  // Did playing `card` break follow-suit? (Only possible under the renege rule.)
+  function isRenege(hand, trick, contract, card) {
+    if (trick.length === 0) return false;
+    return !legalPlays(hand, trick, contract).some((c) => c.id === card.id);
+  }
+
   function trickWinner(trick, contract) {
     const led = trickLedSuit(trick, contract);
     let best = trick[0];
@@ -208,10 +251,10 @@
   }
 
   return {
-    SUITS, SUIT_NAMES, SUIT_GLYPHS, DEFAULT_RULES,
+    SUITS, SUIT_NAMES, SUIT_GLYPHS, DEFAULT_RULES, REACTIONS, cleanRules,
     newDeck, shuffle, deal,
     bidValue, isLegalBid, describeBid, booksToSet,
-    effectiveSuit, rankPower, cardPower, trickLedSuit, legalPlays, trickWinner,
+    effectiveSuit, rankPower, cardPower, trickLedSuit, legalPlays, allowedPlays, isRenege, trickWinner,
     scoreHand, gameOver,
     cardLabel, rankLabel, sortHand,
   };

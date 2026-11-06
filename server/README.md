@@ -10,12 +10,13 @@ the same AI the solo game uses.
 ```
 worker.js         Worker entry: HTTP routes + WebSocket upgrade → Durable Object
   └ GameRoom      one Durable Object per join code (idFromName(code))
-room-core.js      authoritative game state machine (unit-tested in Node)
+../js/room-core.js authoritative game state machine (unit-tested in Node;
+                  the browser runs it too, for solo play)
 ../js/engine.js   shared rules engine (same code the browser runs)
 ../js/ai.js       shared AI + session learner
 ```
 
-`room-core.js` is where the game actually lives — turn validation, AI auto-fill,
+`js/room-core.js` is where the game actually lives — turn validation, AI auto-fill,
 per-player card hiding, scoring. It has no Cloudflare or socket dependencies and
 is covered by `../tests/room.test.js`. The Worker is just transport.
 
@@ -44,6 +45,14 @@ Routes: `POST /api/new` (mint a game key), `GET /api/health` (liveness),
 `WS /api/room/:code/ws` (join that room). Everything else is a static file;
 `.assetsignore` keeps `server/`, `tests/` and docs out of the public assets.
 
+## Turn timer
+
+With the host's turn timer on, the room records a deadline whenever a person
+is up; the Durable Object keeps one **alarm** set to it. If the alarm fires
+and the same player is still on the clock, a bot makes that one move for them
+(`Room.timeout()`), and the clock re-arms for whoever is next. Views carry
+`turnMsLeft` so clients can show the countdown.
+
 ## Durability
 
 Cloudflare can evict an idle room from memory between moves (WebSocket
@@ -71,6 +80,10 @@ Client → server:
 | `{type:'addBot', seat}` / `{type:'kickBot', seat}` | host, lobby only — put a bot in an open seat / remove one |
 | `{type:'toLobby'}` | host, after a game — reopen the lobby (seats kept, scores reset) |
 | `{type:'leave'}` | give up your seat — mid-game a bot takes it for good and plays at once |
+| `{type:'react', id}` | pop a quick reaction over your seat (`Engine.REACTIONS[id]`; ~1 per 1.2 s) |
+| `{type:'rules', rules}` | host only, between hands — set the house rules (cleaned by `Engine.cleanRules`) |
+| `{type:'renege'}` | renege rule only, during play — call a renege on the other team |
+| `{type:'hello', watch:true}` / `{type:'sit'}` | come in as a watcher (also automatic when the table is full) / take an open or bot seat |
 
 A dropped connection (no `leave`) also hands the seat to a bot immediately,
 including a turn in progress, but the player can reclaim it with their token.
@@ -86,7 +99,7 @@ Server → client:
 
 | message | meaning |
 |---|---|
-| `{type:'welcome', token, seat, host}` | your identity (persist `token` to reconnect) |
+| `{type:'welcome', token, seat, host, watcher?}` | your identity (persist `token` to reconnect); `watcher:true` with no token means you're watching |
 | `{type:'state', view, events}` | your tailored snapshot + events to animate |
 | `{type:'error', error}` | rejected action (illegal move, not your turn, …) |
 

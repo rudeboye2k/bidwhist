@@ -2,7 +2,7 @@
 // hiding, AI auto-fill, and a full hand played to a scored result.
 // Run: node tests/room.test.js
 'use strict';
-const { Room } = require('../server/room-core.js');
+const { Room } = require('../js/room-core.js');
 
 let failures = 0;
 function check(name, cond) {
@@ -72,9 +72,11 @@ function autoAct(room, token) {
   } else if (room.need === 'declare-dir') {
     room.submit(token, { type: 'declare', direction: 'uptown' });
   } else if (room.need === 'discard') {
-    room.submit(token, { type: 'discard', cardIds: v.you.hand.slice(0, 6).map((c) => c.id) });
+    room.submit(token, { type: 'discard', cardIds: v.you.hand.slice(0, v.you.hand.length - 12).map((c) => c.id) });
   } else if (room.need === 'play') {
-    const id = (v.you.legalIds && v.you.legalIds[0]) || v.you.hand[0].id;
+    // follow suit properly even under the renege house rule (where every card is allowed)
+    const legal = require('../js/engine.js').legalPlays(room.hands[seat], room.trick, room.contract);
+    const id = (legal[0] && legal[0].id) || v.you.hand[0].id;
     room.submit(token, { type: 'play', cardId: id });
   }
   return true;
@@ -249,6 +251,120 @@ check('rooms have distinct codes', r1.code !== r2.code);
   r.kickBot(host.token, botSeat);
   const newbie = r.join('Neo');
   check('after a game, a kicked bot\'s seat goes to a newcomer', r.seatOf(newbie.token) === botSeat);
+}
+
+// ---- house rules: no jokers, NT minimum 4, lead from the dealer's left ----
+{
+  const r = new Room('RULES', {}, { rng: seeded(61) });
+  const a = r.join('Ann'), b = r.join('Ben');
+  check('non-host cannot change rules', r.setRules(b.token, { noJokers: true }).error === 'not-host');
+  check('host sets rules in the lobby', !r.setRules(a.token, { noJokers: true, ntMinFour: true, leadRule: 'left', minBid: 3 }).error);
+  check('junk rule values are cleaned', (r.setRules(a.token, { noJokers: true, ntMinFour: true, leadRule: 'left', gameTarget: 999 }), r.rules.gameTarget === 7));
+  r.start(a.token);
+  check('no jokers: 12 cards each, 4-card kitty', r.hands.every((h) => h.length === 12) && r.kitty.length === 4 &&
+    !r.hands.flat().concat(r.kitty).some((c) => c.joker));
+  check('rules can\'t change mid-hand', r.setRules(a.token, { noJokers: false }).error === 'between-hands');
+  let g = 0;
+  while (r.phase === 'bidding' && g++ < 50) autoAct(r, a.token) || autoAct(r, b.token);
+  check('NT minimum 4: a 3 No-Trump bid is illegal', !require('../js/engine.js').isLegalBid({ amount: 3, type: 'notrump' }, null, r.rules));
+  g = 0;
+  while ((r.phase === 'declare' || r.phase === 'discard') && g++ < 50) autoAct(r, a.token) || autoAct(r, b.token);
+  if (r.phase === 'playing') {
+    check('discarding 4 with no jokers leaves 12', r.hands[r.highSeat].length === 12);
+    check('lead rule "left": player left of the dealer leads', r.leader === (r.dealer + 1) % 4);
+  }
+}
+
+// ---- table record, last book, reactions ----
+{
+  const r = new Room('REC', { gameTarget: 5 }, { rng: seeded(71) });
+  const a = r.join('Ann'), b = r.join('Ben');
+  r.start(a.token);
+  let g = 0, sawLast = false;
+  while (r.phase !== 'gameover' && g++ < 50000) {
+    if (r.phase === 'handover') { r.nextHand(a.token); continue; }
+    autoAct(r, a.token) || autoAct(r, b.token);
+    if (r.lastTrick && r.lastTrick.cards.length === 4) sawLast = true;
+  }
+  const rec = r.viewFor(a.token).record;
+  check('record counts the finished game', rec.games === 1 && rec.teamWins[0] + rec.teamWins[1] === 1);
+  check('record counts hands and each player', rec.hands > 0 && Object.keys(rec.players).length === 4);
+  check('record tracks partner pairs', Object.keys(rec.pairs).length === 2);
+  check('last book is kept for review', sawLast);
+  const t0 = Date.now();
+  const rr = new Room('REACT', {}, { now: () => t0 });
+  const x = rr.join('Xan');
+  check('a reaction is broadcast', rr.react(x.token, 0).events[0].t === 'react');
+  check('reactions are rate-limited', rr.react(x.token, 1).error === 'slow-down');
+  check('unknown reaction rejected', rr.react(x.token, 999).error === 'bad-reaction');
+  check('watchers can\'t react', rr.react('nobody', 0).error === 'not-seated');
+}
+
+// ---- turn timer: an idle player's move is made by a bot ----
+{
+  let now = 1000000;
+  const r = new Room('TIMER', { turnTimer: 30 }, { rng: seeded(81), now: () => now });
+  const a = r.join('Ann'), b = r.join('Ben');
+  r.start(a.token);
+  const waiting = r.turn;
+  check('timer armed while a human is up', r.deadline === now + 30000 && r.viewFor(a.token).turnMsLeft === 30000);
+  check('timer does nothing early', r.timeout().events.length === 0 && r.turn === waiting);
+  now += 30001;
+  const out = r.timeout();
+  check('timer expired: the idle turn was played for them', out.events[0].t === 'timeout' && out.events[0].seat === waiting && r.turn !== waiting);
+  const off = new Room('NOTIMER', {}, { rng: seeded(82) });
+  const c = off.join('Cy'); off.join('Di'); off.start(c.token);
+  check('no timer by default', off.deadline === null);
+}
+
+// ---- spectators take a seat ----
+{
+  const r = new Room('WATCH', {}, { rng: seeded(91) });
+  const ids = ['A', 'B', 'C', 'D'].map((n) => r.join(n));
+  check('fifth person can\'t join a full table', r.join('Eve').error === 'full');
+  check('full table of people: no seat to take', r.sitIn('Eve').error === 'full');
+  r.leave(ids[3].token); r.start(ids[0].token); // seat 3 opens, becomes a bot at the deal
+  const sat = r.sitIn('Eve');
+  check('a watcher takes the bot\'s seat mid-game', sat.seat === 3 && r.seats[3].kind === 'human' && r.seats[3].name === 'Eve');
+  check('the new player gets their own hand', r.viewFor(sat.token).you.hand.length === 12);
+}
+
+// ---- renege house rule ----
+{
+  const E = require('../js/engine.js');
+  let found = false;
+  for (let seed = 100; seed < 400 && !found; seed++) {
+    const r = new Room('RNG', { renege: true }, { rng: seeded(seed) });
+    const a = r.join('Ann'), b = r.join('Ben');
+    r.start(a.token);
+    let g = 0;
+    // play until Ann (seat 0) must follow a suit she holds, then renege
+    while (r.phase !== 'gameover' && r.phase !== 'handover' && g++ < 2000) {
+      if (r.turn === 0 && r.need === 'play' && r.trick.length) {
+        const legal = E.legalPlays(r.hands[0], r.trick, r.contract);
+        const bad = r.hands[0].find((c) => !legal.some((l) => l.id === c.id));
+        if (bad && legal.length < r.hands[0].length) {
+          const before = r.viewFor(a.token).you.legalIds.length;
+          check('renege rule: every card is playable', before === r.hands[0].length);
+          r.submit(a.token, { type: 'play', cardId: bad.id });
+          check('renege recorded', r.reneges.length === 1 && r.reneges[0].seat === 0);
+          const call = r.phase === 'playing' ? r.callRenege(b.token) : null;
+          if (call) {
+            const ev = call.events[0];
+            check('opponent\'s renege call is upheld', ev.t === 'renege' && ev.ok === true && ev.offender === 0);
+            check('wrong call (no renege by the other team) is rejected', r.phase !== 'playing' || r.callRenege(a.token).events[0].ok === false);
+          }
+          let h = 0;
+          while (r.phase === 'playing' && h++ < 500) autoAct(r, a.token) || autoAct(r, b.token);
+          const res = r.lastResult;
+          check('3-book renege penalty applied at the end', res && res.penalties.length === 1 && res.penalties[0].seat === 0);
+          found = true; break;
+        }
+      }
+      autoAct(r, a.token) || autoAct(r, b.token);
+    }
+  }
+  check('found a deal to test a renege on', found);
 }
 
 if (failures) { console.error('\n' + failures + ' failure(s)'); process.exit(1); }

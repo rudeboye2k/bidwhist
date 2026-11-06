@@ -151,8 +151,10 @@
   function chooseBid(hand, currentHigh, rules, mustBid, rng, learner, seat) {
     rng = rng || Math.random;
     void seat;
-    const plan = bestPlan(hand, learner ? learner.bidBias : 0);
-    const noise = (rng() - 0.5) * 0.8;
+    // Easy computers misjudge their hands more (wider noise, a touch timid).
+    const easy = rules && rules.aiLevel === 'easy';
+    const plan = bestPlan(hand, (learner ? learner.bidBias : 0) + (easy ? -0.4 : 0));
+    const noise = (rng() - 0.5) * (easy ? 2.4 : 0.8);
     let maxAmount = Math.floor(plan.teamBooks + noise) - 6;
     maxAmount = Math.min(7, maxAmount);
 
@@ -189,7 +191,8 @@
       if (contract.type !== 'notrump' && c.suit === contract.trump) return 1000 + p;
       return p;
     };
-    return hand.slice().sort((a, b) => keepValue(a) - keepValue(b)).slice(0, 6);
+    // Keep 12; bury the rest (6 with jokers in the deck, 4 without).
+    return hand.slice().sort((a, b) => keepValue(a) - keepValue(b)).slice(0, Math.max(0, hand.length - 12));
   }
 
   // ---- trick play -----------------------------------------------------------
@@ -201,9 +204,17 @@
 
   // memory = Set of card ids already played this hand (shared, updated by app).
   // Returns the card to play. `seat` is this AI's seat; partner = (seat+2)%4.
-  function choosePlay(hand, trick, contract, seat, memory) {
+  // `level` (optional): 'easy' plays a loose card about a third of the time;
+  // 'sharp' draws trump: holding 4+ trumps while opponents may still have
+  // some, it leads its top trump. Worth ~+0.1 pt/hand over 'regular' in a
+  // paired simulation (tests/levels.js). Second-hand-low and void-building
+  // discards were tried too and measured slightly negative, so they're out.
+  function choosePlay(hand, trick, contract, seat, memory, level, rng) {
     const legal = Engine.legalPlays(hand, trick, contract);
     if (legal.length === 1) return legal[0];
+    rng = rng || Math.random;
+    if (level === 'easy' && rng() < 0.35) return legal[Math.floor(rng() * legal.length)];
+    const sharp = level === 'sharp';
     const dir = contract.type === 'notrump' ? contract.direction : contract.type;
     const power = (c) => Engine.cardPower(c, contract, Engine.trickLedSuit(trick, contract) || Engine.effectiveSuit(c, contract));
     const inSuitPower = (c) => c.joker ? (contract.type === 'notrump' ? 0 : (c.joker === 'big' ? 1000 : 999)) : Engine.rankPower(c.rank, dir);
@@ -221,6 +232,15 @@
       return true;
     };
 
+    if (sharp && trick.length === 0 && contract.type !== 'notrump') {
+      const tr = legal.filter((c) => c.joker || c.suit === contract.trump);
+      let out = 15 - tr.length; // 13 trumps + 2 jokers not in my hand (an overcount with no jokers — harmless)
+      for (const id of memory) if (id[0] === 'J' || id[0] === contract.trump) out--;
+      if (tr.length >= 4 && out > 0) {
+        const pw = (c) => (c.joker ? (c.joker === 'big' ? 1000 : 999) : Engine.rankPower(c.rank, dir));
+        return tr.sort((a, b) => pw(b) - pw(a))[0];
+      }
+    }
     if (trick.length === 0) {
       // Leading. Prefer a boss card; declarer-side leads trumps to pull them.
       const bosses = legal.filter(isBoss);

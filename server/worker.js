@@ -18,10 +18,10 @@
  * token rides on the socket itself (serializeAttachment) rather than in memory.
  */
 
-// room-core.js pulls in engine.js + ai.js through its own require()s. wrangler
+// js/room-core.js pulls in engine.js + ai.js through its own require()s. wrangler
 // bundles with esbuild, which treats these UMD files as CommonJS, so a plain
 // default import gives us their module.exports.
-import RoomCore from './room-core.js';
+import RoomCore from '../js/room-core.js';
 
 const { Room } = RoomCore;
 
@@ -85,6 +85,7 @@ export class GameRoom {
 
   async _save() {
     if (this.room) await this.state.storage.put('room', this.room.toJSON());
+    await this._syncAlarm();
   }
 
   async fetch(request) {
@@ -121,11 +122,28 @@ export class GameRoom {
       } else {
         r = this.room.join(msg.name, msg.avatar); token = r.token;
       }
+      if (r.error === 'full' || msg.watch) {
+        // Table's full (or they asked to watch): they come in as a spectator
+        // and can take a seat when one opens or a bot is playing one.
+        if (r.token) this.room.leave(r.token);
+        ws.serializeAttachment({ token: null, watcher: true, name: msg.name, avatar: msg.avatar });
+        this._send(ws, { type: 'welcome', token: null, seat: null, watcher: true });
+        return this._broadcast();
+      }
       if (r.error) return this._send(ws, { type: 'error', error: r.error });
       ws.serializeAttachment({ token });
       await this._save();
       this._send(ws, { type: 'welcome', token, seat: r.seat, host: !!r.host });
       return this._broadcast();
+    }
+
+    if (msg.type === 'sit' && meta.watcher && !meta.token) {
+      const r = this.room.sitIn(meta.name, meta.avatar);
+      if (r.error) return this._send(ws, { type: 'error', error: r.error });
+      ws.serializeAttachment({ token: r.token });
+      await this._save();
+      this._send(ws, { type: 'welcome', token: r.token, seat: r.seat, host: !!r.host });
+      return this._broadcast(r.events);
     }
 
     if (!meta.token) return this._send(ws, { type: 'error', error: 'say-hello' });
@@ -141,6 +159,9 @@ export class GameRoom {
     else if (msg.type === 'addBot') out = this.room.addBot(meta.token, msg.seat);
     else if (msg.type === 'kickBot') out = this.room.kickBot(meta.token, msg.seat);
     else if (msg.type === 'toLobby') out = this.room.toLobby(meta.token);
+    else if (msg.type === 'react') out = this.room.react(meta.token, msg.id);
+    else if (msg.type === 'rules') out = this.room.setRules(meta.token, msg.rules);
+    else if (msg.type === 'renege') out = this.room.callRenege(meta.token);
     else if (msg.type === 'leave') {
       out = this.room.leave(meta.token);       // mid-game: a bot takes the seat
       ws.serializeAttachment({ token: null }); // this socket no longer holds a seat
@@ -148,8 +169,28 @@ export class GameRoom {
     else return this._send(ws, { type: 'error', error: 'unknown-type' });
 
     if (out && out.error) return this._send(ws, { type: 'error', error: out.error });
-    await this._save();
+    // Reactions are just chatter: no need to persist the room for them.
+    if (msg.type !== 'react') await this._save();
     this._broadcast(out && out.events);
+  }
+
+  // Turn timer: one Durable Object alarm, always set to the current deadline.
+  async _syncAlarm() {
+    try {
+      if (this.room && this.room.deadline) await this.state.storage.setAlarm(this.room.deadline);
+      else await this.state.storage.deleteAlarm();
+    } catch (_) { /* alarms unavailable: the timer simply doesn't fire */ }
+  }
+
+  async alarm() {
+    if (!this.room) return;
+    const out = this.room.timeout();
+    if (out.events.length) {
+      await this._save();
+      this._broadcast(out.events);
+    } else {
+      await this._syncAlarm(); // woke early (clock skew): re-arm
+    }
   }
 
   async webSocketClose(ws, code) {
@@ -184,10 +225,15 @@ export class GameRoom {
   // Push each connected socket its own tailored snapshot (its own hand only),
   // plus the shared event stream for animation.
   _broadcast(events, except) {
-    for (const ws of this.state.getWebSockets()) {
+    const sockets = this.state.getWebSockets();
+    const watchers = sockets.filter((s) => s !== except && (s.deserializeAttachment() || {}).watcher && !(s.deserializeAttachment() || {}).token).length;
+    for (const ws of sockets) {
       if (ws === except) continue;
       const meta = ws.deserializeAttachment() || {};
-      this._send(ws, { type: 'state', view: this.room.viewFor(meta.token), events: events || [] });
+      const view = this.room.viewFor(meta.token);
+      view.watchers = watchers;
+      view.watching = !meta.token && !!meta.watcher;
+      this._send(ws, { type: 'state', view, events: events || [] });
     }
   }
 }

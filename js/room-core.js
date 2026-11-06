@@ -11,7 +11,7 @@
  */
 (function (root, factory) {
   if (typeof module !== 'undefined' && module.exports)
-    module.exports = factory(require('../js/engine.js'), require('../js/ai.js'));
+    module.exports = factory(require('./engine.js'), require('./ai.js'));
   else root.RoomCore = factory(root.Engine, root.AI);
 })(typeof self !== 'undefined' ? self : this, function (Engine, AI) {
   'use strict';
@@ -41,6 +41,11 @@
   }
 
   const DEFAULT_AI_NAMES = ['Pearl', 'Marcus', 'Deacon', 'Ruby'];
+  const RENEGE_PENALTY = 3; // books moved from the reneging team to the callers
+
+  function newRecord() {
+    return { hands: 0, games: 0, teamWins: [0, 0], bostons: [0, 0], made: [0, 0], sets: [0, 0], players: {}, pairs: {} };
+  }
 
   class Room {
     constructor(code, rules, opts) {
@@ -48,6 +53,7 @@
       this.code = code;
       this.rules = Object.assign({}, E.DEFAULT_RULES, rules || {});
       this.rng = opts.rng || Math.random;
+      this.now = opts.now || Date.now;     // injectable clock (turn timer tests)
       this.phase = 'lobby';                 // lobby|bidding|declare|discard|playing|handover|gameover
       this.seats = [0, 1, 2, 3].map((i) => ({
         seat: i, kind: 'empty', name: null, avatar: null, token: null, connected: false, ai: null,
@@ -60,6 +66,11 @@
       this.teamNames = ['Team A', 'Team B'];
       this.captains = [null, null];   // token of each team's captain
       this.joinSeq = 0;
+      this.record = newRecord();     // running table record across games
+      this.moveNo = 0;               // bumps on every move (turn-timer key)
+      this.deadline = null;          // turn timer: when a bot plays an idle turn
+      this.timerKey = null;
+      this.reactAt = {};             // per-seat reaction rate limit
       this._resetHand();
     }
 
@@ -272,6 +283,9 @@
       this.bidIndex = 0;
       this.bidOrder = [];
       this.lastResult = null;
+      this.lastTrick = null;         // { cards, winner } of the previous book
+      this.reneges = [];             // renege house rule: { seat, suit, revealed, called }
+      this.trickNo = 0;
     }
 
     // Host starts: empty seats become AI, then deal and open the auction.
@@ -306,7 +320,7 @@
     _startHand(events) {
       this._resetHand();
       this.handNo++;
-      const deck = E.shuffle(E.newDeck(), this.rng);
+      const deck = E.shuffle(E.newDeck(this.rules), this.rng);
       const dealt = E.deal(deck);
       this.hands = dealt.hands;
       this.kitty = dealt.kitty;
@@ -349,6 +363,7 @@
       if (this.phase !== 'bidding' || this.need !== 'bid') return { error: 'bad-phase' };
       if (!bid || (bid.pass && this._mustBid(seat))) return { error: 'must-bid' };
       if (!bid.pass && !E.isLegalBid(bid, this.high, this.rules)) return { error: 'illegal-bid' };
+      this.moveNo++;
       this.bids[seat] = bid.pass ? { pass: true } : { amount: bid.amount, type: bid.type };
       if (!bid.pass) {
         this.bids[seat]._seat = seat;
@@ -389,6 +404,7 @@
         if (!E.SUITS.includes(msg.trump)) return { error: 'bad-suit' };
         trump = msg.trump; direction = this.high.type;
       }
+      this.moveNo++;
       this.contract = { amount: this.high.amount, type: this.high.type, trump, direction };
       events.push({ t: 'declare', seat, contract: this.contract });
       // Bidder picks up the kitty; kitty book credited if the rule is on.
@@ -405,10 +421,12 @@
 
     _applyDiscard(seat, cardIds, events) {
       if (this.phase !== 'discard' || seat !== this.highSeat) return { error: 'bad-phase' };
-      if (!Array.isArray(cardIds) || cardIds.length !== 6) return { error: 'need-6' };
+      const need = this.hands[seat].length - 12; // 6 with jokers, 4 without
+      if (!Array.isArray(cardIds) || cardIds.length !== need) return { error: 'need-' + need };
       const set = new Set(cardIds);
       const owned = this.hands[seat].filter((c) => set.has(c.id));
-      if (owned.length !== 6) return { error: 'not-your-cards' };
+      if (owned.length !== need) return { error: 'not-your-cards' };
+      this.moveNo++;
       this.hands[seat] = this.hands[seat].filter((c) => !set.has(c.id));
       events.push({ t: 'discard', seat });
       this._beginPlay(events);
@@ -417,8 +435,9 @@
 
     _beginPlay(events) {
       this.phase = 'playing';
-      this.leader = this.highSeat;
-      this.turn = this.highSeat;
+      // House rule: the bidder leads (default), or the player left of the dealer.
+      this.leader = this.rules.leadRule === 'left' ? (this.dealer + 1) % 4 : this.highSeat;
+      this.turn = this.leader;
       this.need = 'play';
       this.trick = [];
       events.push({ t: 'leadturn', seat: this.leader });
@@ -428,8 +447,18 @@
       if (this.phase !== 'playing' || this.need !== 'play') return { error: 'bad-phase' };
       const card = this.hands[seat].find((c) => c.id === cardId);
       if (!card) return { error: 'no-card' };
-      const legal = E.legalPlays(this.hands[seat], this.trick, this.contract);
-      if (!legal.some((c) => c.id === cardId)) return { error: 'illegal-play' };
+      const allowed = E.allowedPlays(this.hands[seat], this.trick, this.contract, this.rules);
+      if (!allowed.some((c) => c.id === cardId)) return { error: 'illegal-play' };
+      const led = E.trickLedSuit(this.trick, this.contract);
+      const reneged = this.rules.renege && E.isRenege(this.hands[seat], this.trick, this.contract, card);
+      // A later card in a suit this player failed to follow proves the renege.
+      if (this.rules.renege) {
+        const suit = E.effectiveSuit(card, this.contract);
+        for (const r of this.reneges)
+          if (r.seat === seat && !r.revealed && suit && suit === r.suit) { r.revealed = true; this._botCall(r, events); }
+      }
+      if (reneged) this.reneges.push({ seat, suit: led, revealed: false, called: false, trickNo: this.trickNo });
+      this.moveNo++;
       this.hands[seat] = this.hands[seat].filter((c) => c.id !== cardId);
       this.trick.push({ player: seat, card });
       this.memory.add(cardId);
@@ -445,6 +474,8 @@
       if (!this.seatBooks) this.seatBooks = [0, 0, 0, 0];
       this.seatBooks[winner]++;
       events.push({ t: 'trick', winner, cards: this.trick.slice() });
+      this.lastTrick = { cards: this.trick.map((p) => ({ seat: p.player, card: p.card })), winner };
+      this.trickNo++;
       this.trick = [];
       const handDone = this.hands.every((h) => h.length === 0);
       if (handDone) return this._endHand(events);
@@ -456,13 +487,26 @@
 
     _endHand(events) {
       const bidTeam = this.highSeat % 2;
+      // Renege house rule: bots count the cards at the end and call anything
+      // their team hasn't; each called renege moves 3 books to the callers.
+      for (const r of this.reneges) if (!r.called) this._botCall(r, events, true);
+      const penalties = [];
+      for (const r of this.reneges) {
+        if (!r.called) continue;
+        const off = r.seat % 2, call = 1 - off;
+        const take = Math.min(RENEGE_PENALTY, this.books[off]);
+        this.books[off] -= take; this.books[call] += take;
+        penalties.push({ seat: r.seat, books: take });
+      }
       const res = E.scoreHand(this.contract.amount, this.contract, this.books[bidTeam], this.rules);
       this.scores[bidTeam] += res.delta;
       this.lastResult = {
         highSeat: this.highSeat, bid: this.high, contract: this.contract,
         bidTeam, books: this.books.slice(), needed: res.needed, delta: res.delta,
         made: res.made, boston: this.books[bidTeam] === 13, scores: this.scores.slice(),
+        penalties,
       };
+      this._recordHand(bidTeam, res);
       aiLib.observeHand(this.learner, {
         declarerSeat: this.highSeat, amount: this.contract.amount, needed: res.needed,
         bidTeamBooks: this.books[bidTeam], made: res.made,
@@ -474,11 +518,152 @@
         this.phase = 'gameover';
         this.turn = null; this.need = null;
         events.push({ t: 'gameover', winner, scores: this.scores.slice() });
+        this._recordGame(winner);
       } else {
         this.phase = 'handover';
         this.turn = null; this.need = null;
       }
+      this._banter(bidTeam, res, events);
       return {};
+    }
+
+    // ---- table record --------------------------------------------------------
+
+    _player(seat) {
+      const s = this.seats[seat];
+      const key = (s.name || 'Player') + (s.kind === 'ai' ? ' (bot)' : '');
+      const P = this.record.players;
+      if (!P[key]) {
+        if (Object.keys(P).length >= 24) return null; // keep the record small
+        P[key] = { name: s.name || 'Player', bot: s.kind === 'ai', books: 0, bids: 0, made: 0, bostons: 0, games: 0, wins: 0 };
+      }
+      return P[key];
+    }
+
+    _recordHand(bidTeam, res) {
+      const R = this.record;
+      R.hands++;
+      if (res.made) R.made[bidTeam]++; else R.sets[bidTeam]++;
+      const boston = this.books[bidTeam] === 13;
+      if (boston) R.bostons[bidTeam]++;
+      for (let seat = 0; seat < 4; seat++) {
+        const p = this._player(seat); if (!p) continue;
+        p.books += (this.seatBooks && this.seatBooks[seat]) || 0;
+        if (seat === this.highSeat) { p.bids++; if (res.made) p.made++; if (boston) p.bostons++; }
+      }
+    }
+
+    _recordGame(winner) {
+      const R = this.record;
+      R.games++; R.teamWins[winner]++;
+      for (const team of [0, 1]) {
+        const names = [team, team + 2].map((n) => this.seats[n].name || 'Player').sort();
+        const key = names.join(' & ');
+        if (!R.pairs[key] && Object.keys(R.pairs).length >= 24) continue;
+        const pr = R.pairs[key] || (R.pairs[key] = { names, games: 0, wins: 0 });
+        pr.games++; if (team === winner) pr.wins++;
+        for (const n of [team, team + 2]) { const p = this._player(n); if (p) { p.games++; if (team === winner) p.wins++; } }
+      }
+    }
+
+    // ---- reactions -------------------------------------------------------------
+
+    react(token, id) {
+      const seat = this.seatOf(token);
+      if (seat === null) return { error: 'not-seated' };
+      if (!Number.isInteger(id) || id < 0 || id >= E.REACTIONS.length) return { error: 'bad-reaction' };
+      const now = this.now();
+      if (now - (this.reactAt[seat] || 0) < 1200) return { error: 'slow-down' };
+      this.reactAt[seat] = now;
+      return { events: [{ t: 'react', seat, id }] };
+    }
+
+    // Bots talk a little trash at the end of a hand.
+    _banter(bidTeam, res, events) {
+      const bots = (team) => [team, team + 2].filter((n) => this.seats[n].kind === 'ai');
+      const pick = (arr) => arr[Math.floor(this.rng() * arr.length)];
+      const R = E.REACTIONS;
+      const say = (seat, text) => { if (seat != null) events.push({ t: 'react', seat, id: R.indexOf(text) }); };
+      const def = bots(1 - bidTeam), dec = bots(bidTeam);
+      if (!res.made && def.length && this.rng() < 0.7) say(pick(def), pick(["Set 'em!", '😂', 'Too slow!']));
+      else if (this.books[bidTeam] === 13 && dec.length) say(pick(dec), pick(['🔥', '🙌']));
+      else if (res.made && dec.length && this.rng() < 0.25) say(pick(dec), pick(['Nice book!', '👏']));
+    }
+
+    // ---- renege (house rule) -----------------------------------------------------
+
+    // Any seated player may call a renege during play. If someone on the other
+    // team broke follow-suit this hand (and it hasn't been called), it's
+    // upheld: 3 books move at the end of the hand. A wrong call costs nothing.
+    callRenege(token) {
+      const seat = this.seatOf(token);
+      if (seat === null) return { error: 'not-seated' };
+      if (!this.rules.renege) return { error: 'no-renege-rule' };
+      if (this.phase !== 'playing') return { error: 'bad-phase' };
+      const r = this.reneges.find((x) => !x.called && x.seat % 2 !== seat % 2);
+      const events = [];
+      if (r) { r.called = true; events.push({ t: 'renege', caller: seat, offender: r.seat, ok: true, books: RENEGE_PENALTY }); }
+      else events.push({ t: 'renege', caller: seat, ok: false });
+      return { events };
+    }
+
+    // Bots (or a bot covering an away player) call a renege once it's proven.
+    _botCall(r, events, atCount) {
+      if (r.called) return;
+      const callers = [0, 1, 2, 3].filter((n) => n % 2 !== r.seat % 2 &&
+        (this.seats[n].kind === 'ai' || !this.seats[n].connected));
+      if (!callers.length) return;
+      r.called = true;
+      events.push({ t: 'renege', caller: callers[0], offender: r.seat, ok: true, books: RENEGE_PENALTY, atCount: !!atCount });
+    }
+
+    // ---- house rules (host) ------------------------------------------------------
+
+    setRules(token, rules) {
+      if (token !== this.effectiveHost()) return { error: 'not-host' };
+      if (!['lobby', 'handover', 'gameover'].includes(this.phase)) return { error: 'between-hands' };
+      this.rules = Object.assign({}, this.rules, E.cleanRules(rules));
+      return { events: [{ t: 'rules' }] };
+    }
+
+    // ---- spectators ----------------------------------------------------------------
+
+    // A watcher takes a seat: an open seat, or one a bot is playing.
+    sitIn(name, avatar) {
+      let spot = this.seats.find((s) => s.kind === 'empty')
+        || this.seats.find((s) => s.kind === 'ai' && s.left)
+        || this.seats.find((s) => s.kind === 'ai');
+      if (!spot) return { error: 'full' };
+      const token = randId(16);
+      Object.assign(spot, {
+        kind: 'human', name: cleanName(name, 'Player'), avatar: cleanAvatar(avatar),
+        token, connected: true, ai: null, left: false, joinedTeamAt: ++this.joinSeq,
+      });
+      if (!this.hostToken) this.hostToken = token;
+      this._updateCaptains();
+      const events = [{ t: 'sitIn', seat: spot.seat, name: spot.name }];
+      return { seat: spot.seat, token, host: this.hostToken === token, events };
+    }
+
+    // ---- turn timer ------------------------------------------------------------------
+
+    _armTimer() {
+      if (!this.rules.turnTimer || this.turn === null) { this.deadline = null; this.timerKey = null; return; }
+      if (this.timerKey === this.moveNo && this.deadline) return; // same wait, keep the clock
+      this.timerKey = this.moveNo;
+      this.deadline = this.now() + this.rules.turnTimer * 1000;
+    }
+
+    // Called when the timer fires: if the same player is still on the clock,
+    // a bot makes that one move for them.
+    timeout() {
+      if (!this.deadline || this.now() < this.deadline || this.turn === null) return { events: [] };
+      const seat = this.turn;
+      const events = [{ t: 'timeout', seat }];
+      this.deadline = null; this.timerKey = null;
+      this._aiAct(seat, events);
+      this._advance(events);
+      return { events };
     }
 
     // ---- AI auto-advance ---------------------------------------------------
@@ -488,29 +673,44 @@
     _advance(events) {
       let guard = 0;
       while (guard++ < 400) {
-        if (this.turn === null) return;
+        if (this.turn === null) { this._armTimer(); return; }
         const s = this.seats[this.turn];
         const humanPresent = s.kind === 'human' && s.connected;
-        if (humanPresent) return; // wait for their intent
+        if (humanPresent) { this._armTimer(); return; } // wait for their intent
         // AI (or a dropped human) acts.
-        if (this.need === 'bid') {
-          const mustBid = this._mustBid(this.turn);
-          const r = aiLib.chooseBid(this.hands[this.turn], this.high, this.rules, mustBid,
-            this.rng, this.learner, this.turn);
-          if (!r.bid.pass) this.plans[this.turn] = r.plan;
-          this._applyBid(this.turn, r.bid, events);
-        } else if (this.need === 'declare-suit' || this.need === 'declare-dir') {
-          const plan = this.plans[this.turn] || aiLib.bestPlan(this.hands[this.turn], this.learner.bidBias);
-          if (this.high.type === 'notrump') this._applyDeclare(this.turn, { direction: plan.direction }, events);
-          else this._applyDeclare(this.turn, { trump: plan.trump }, events);
-        } else if (this.need === 'discard') {
-          const discards = aiLib.chooseDiscards(this.hands[this.turn], this.contract);
-          this._applyDiscard(this.turn, discards.map((c) => c.id), events);
-        } else if (this.need === 'play') {
-          const card = aiLib.choosePlay(this.hands[this.turn], this.trick, this.contract, this.turn, this.memory);
-          this._applyPlay(this.turn, card.id, events);
-        } else return;
+        if (!this._aiAct(this.turn, events)) return;
       }
+    }
+
+    // One computer move for `seat` (a bot, an away player, or a timed-out turn).
+    _aiAct(seat, events) {
+      const level = this.rules.aiLevel;
+      if (this.need === 'bid') {
+        const mustBid = this._mustBid(seat);
+        const r = aiLib.chooseBid(this.hands[seat], this.high, this.rules, mustBid, this.rng, this.learner, seat);
+        if (!r.bid.pass) this.plans[seat] = r.plan;
+        this._applyBid(seat, r.bid, events);
+      } else if (this.need === 'declare-suit' || this.need === 'declare-dir') {
+        // A bot has its plan from bidding; a timed-out human gets the best fit.
+        const plan = this.plans[seat] || {};
+        const hand = this.hands[seat];
+        if (this.high.type === 'notrump') {
+          const dir = plan.direction ||
+            (aiLib.evalNoTrump(hand, 'uptown') >= aiLib.evalNoTrump(hand, 'downtown') ? 'uptown' : 'downtown');
+          this._applyDeclare(seat, { direction: dir }, events);
+        } else {
+          const trump = plan.trump ||
+            E.SUITS.slice().sort((a, b) => aiLib.evalTrump(hand, b, this.high.type) - aiLib.evalTrump(hand, a, this.high.type))[0];
+          this._applyDeclare(seat, { trump }, events);
+        }
+      } else if (this.need === 'discard') {
+        const discards = aiLib.chooseDiscards(this.hands[seat], this.contract);
+        this._applyDiscard(seat, discards.map((c) => c.id), events);
+      } else if (this.need === 'play') {
+        const card = aiLib.choosePlay(this.hands[seat], this.trick, this.contract, seat, this.memory, level, this.rng);
+        this._applyPlay(seat, card.id, events);
+      } else return false;
+      return true;
     }
 
     // ---- views -------------------------------------------------------------
@@ -546,10 +746,11 @@
           you: s.token === token && token != null,
         })),
         result: this.phase === 'handover' || this.phase === 'gameover' ? this.lastResult : null,
-        rules: {
-          minBid: this.rules.minBid, gameTarget: this.rules.gameTarget,
-          kittyIsBook: this.rules.kittyIsBook, sportKitty: this.rules.sportKitty,
-        },
+        rules: E.cleanRules(this.rules),
+        record: this.record,
+        lastTrick: this.lastTrick,
+        turnMsLeft: this.deadline ? Math.max(0, this.deadline - this.now()) : null,
+        kittySize: this.rules.noJokers ? 4 : 6,
       };
       if (seat !== null && this.hands[seat]) {
         const dir = this.contract ? (this.contract.type === 'notrump' ? this.contract.direction : this.contract.type) : 'uptown';
@@ -558,7 +759,7 @@
           hand: E.sortHand(this.hands[seat], dir, this.contract),
           mustBid: this.need === 'bid' && this.turn === seat && this._mustBid(seat),
           legalIds: (this.turn === seat && this.need === 'play')
-            ? E.legalPlays(this.hands[seat], this.trick, this.contract).map((c) => c.id)
+            ? E.allowedPlays(this.hands[seat], this.trick, this.contract, this.rules).map((c) => c.id)
             : null,
         };
       } else {
@@ -580,7 +781,7 @@
     // an array.
     toJSON() {
       const o = {};
-      for (const k of Object.keys(this)) if (k !== 'rng') o[k] = this[k];
+      for (const k of Object.keys(this)) if (k !== 'rng' && k !== 'now') o[k] = this[k];
       o.memory = Array.from(this.memory || []);
       return o;
     }
@@ -590,6 +791,7 @@
       Object.assign(r, data);
       r.memory = new Set(data.memory || []);
       r.rng = Math.random;
+      r.now = Date.now;
       return r;
     }
   }

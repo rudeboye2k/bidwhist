@@ -27,6 +27,24 @@ online play is powered by a small Cloudflare Worker.
   celebration. **Table Rules → Look & sound** picks the felt (green, burgundy,
   midnight blue, rent-party purple) and turns sound effects & vibration on or
   off (also in the menu). Sounds are synthesized in the browser — no files.
+- **Help at the table:** a badge on the felt always shows trump and which
+  way it runs (trump cards get a gold edge in your hand); **Last book** shows
+  the previous four cards; the bid panel explains each bid in plain English
+  ("4 Uptown: your team needs 10 of 13 books…"); and an optional **Coach**
+  (Table Rules → Help & readability) suggests bids, trump, what to bury and
+  which card to play, with a reason. Coach uses the same brain as the
+  computer players.
+- **Talk at the table:** 💬 pops a quick call-out or emoji over your seat
+  ("Run a Boston!", "Set 'em!", 😂 …); the bots talk a little trash too.
+- **Table record:** wins, Bostons, sets, best bidder and (online) best duo
+  across games at the table, on the game-over screen; solo also keeps an
+  all-time record vs the computer.
+- **Watch & sit in:** if a table is full, an invite link lets you watch (no
+  cards shown); tap **Take a seat** when a seat opens or a bot is playing one.
+- **Works offline:** install it to your home screen; solo play works with no
+  signal (a service worker, `sw.js`, caches the app).
+- **Readability:** bigger cards in your hand, a four-color deck (blue ♦,
+  green ♣), keyboard play (Tab + Enter) and screen-reader labels.
 - **Branding:** page title, link-preview card (`img/og-card.png`, shown when
   the link is texted or posted), and home-screen icons (`img/`,
   `manifest.webmanifest` — saved to a phone it's called **Da Kitty**).
@@ -73,7 +91,13 @@ protocol are in [`server/README.md`](server/README.md). Opened as a local file
 
 ## The computer learns as you play
 
-In solo play the table adapts across a session (`js/ai.js`). It isn't a neural
+The computer comes in three levels (Table Rules → Computer players): **Easy**
+misjudges hands and plays loose (≈0.8 pt/hand worse than Regular), **Regular**
+is the tuned default, and **Sharp** draws trump when it holds four or more
+(≈+0.1 pt/hand over Regular). Both edges are measured by a paired simulation,
+`tests/levels.js`, that replays the same deals with the teams swapped.
+
+In solo play the table also adapts across a session (`js/ai.js`). It isn't a neural
 net — under Bid Whist's scoring the honest truth is that a made contract already
 scores *all* books over six, so a well-tuned static bidder is near the ceiling.
 Instead the AI runs a self-correcting bid calibrator that **stays neutral while
@@ -151,8 +175,19 @@ a constant. In-game **Table Rules** lets you change (persisted in the browser):
 | Dealer must bid if all three pass | on (off = throw the hand in) |
 | Sport the kitty (shown to the whole table) | off |
 | A made 7-bid (Boston) scores double | off |
+| Play without jokers (52 cards, 4-card kitty) | off |
+| No-Trump bids start at 4 | off |
+| First lead: the high bidder, or left of the dealer | bidder |
+| Renege can be called (follow-suit not enforced; 3 books to the callers) | off |
+| Computer players: Easy / Regular / Sharp | Regular |
+| Turn timer online (a bot moves for an idle player) | off |
 
-Reneging isn't modeled: the app enforces follow-suit, so illegal plays are
+Online, the **host** sets the rules for the table (between hands); everyone
+else sees them read-only. Under the renege rule any card may be played; any
+player can tap **Call renege**, and bots call one as soon as it's proven (or
+at the count). Each upheld renege moves 3 books to the other team.
+
+Without the renege rule, the app enforces follow-suit, so illegal plays are
 impossible rather than penalized.
 
 ## Code layout
@@ -163,24 +198,28 @@ manifest.webmanifest home-screen app name/icons
 img/                link-preview card and app icons
 styles.css          the whole look — felt, mahogany, gold, cream card stock
 js/engine.js        pure rules engine (deck, bids, ranking, tricks, scoring)
-js/ai.js            heuristic AI + session learner
+js/ai.js            heuristic AI (Easy / Regular / Sharp) + session learner
+js/room-core.js     the game itself: authoritative state machine — runs on the
+                    server for online play AND in the browser for solo
 js/net.js           WebSocket transport for online play
 js/qrcode.js        self-contained QR generator for invite links
 js/app.js           game flow, DOM rendering, and the online controller
-server/room-core.js authoritative game state machine (shared by the backend)
-server/worker.js    Worker entry (/api/*) + GameRoom Durable Object
+server/worker.js    Worker entry (/api/*) + GameRoom Durable Object (+ turn-timer alarm)
+sw.js               service worker: offline solo + installable app
 wrangler.toml       the one Worker: static site + server + Durable Object
 .assetsignore       keeps server code, tests and docs out of public assets
 tests/              engine tests, AI-vs-AI simulator, room-core tests
 ```
 
-`engine.js`, `ai.js`, and `server/room-core.js` are dependency-free and load in
-both the browser and Node, so the exact code the game (and the server) runs is
-what the tests exercise:
+`engine.js`, `ai.js`, and `room-core.js` are dependency-free and load in both
+the browser and Node. Solo and online run the *same* room code — solo just
+talks to it in-page instead of over a socket — so the exact code every game
+runs is what the tests exercise:
 
 ```sh
 node tests/engine.test.js    # rules invariants
 node tests/simulate.js 400   # paired AI sim: learner is harmless + responsive
+node tests/levels.js 3000    # paired AI sim: Sharp > Regular > Easy
 node tests/room.test.js      # authoritative room: turns, card hiding, isolation
 node tests/qrcode.test.js    # QR encoder: RS syndromes + structure
 ```
