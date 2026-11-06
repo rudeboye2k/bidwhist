@@ -1285,3 +1285,22 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
   .action-bar { row-gap: 6px; padding-top: 10px; padding-bottom: 10px; }
   .bid-group .lbl { display: none; }
 }
+
+/* ---------- bidding: number only; trump + direction after the kitty ---------- */
+.bid-go .btn.nt { background: linear-gradient(180deg, #e9dcc0, #cdbb94); }
+.suit-pick { font-size: 18px; }
+.suit-pick small { font-family: var(--font-body); font-size: 11px; font-weight: 600; margin-left: 2px; }
+.suit-pick.red { color: #e0705f; }
+.suit-pick.on.red { color: #8b1d14; }
+.chipbtn small { font-size: 10.5px; font-weight: 500; opacity: .85; }
+.declare-hint { flex-basis: 100%; text-align: center; }
+:root[data-deck="four"] .suit-pick.suit-D { color: #5b8ff0; }
+:root[data-deck="four"] .suit-pick.suit-C { color: #4fbf74; }
+@media (max-width: 600px) {
+  .nt-long { display: none; }
+  .bid-go .btn { padding: 9px 10px; }
+  .suit-pick small { display: none; }
+  .suit-pick { min-width: 52px; }
+  .chipbtn small { display: none; }
+}
+.bid-col.bid-go { flex-direction: row; flex-wrap: wrap; justify-content: center; }

@@ -50,8 +50,11 @@ function runSession(hands, rules, learner, seed) {
     }
     if (high === null) continue;
 
-    const contract = { amount: high.amount, type: high.type, trump: hp.trump, direction: hp.direction };
+    // High bidder takes the kitty, THEN names trump + direction (18 cards in hand).
+    void hp;
     const bh = d[hs].concat(kitty);
+    const decl = AI.chooseDeclare(bh, high.type);
+    const contract = { amount: high.amount, type: high.type === 'notrump' ? 'notrump' : decl.direction, trump: decl.trump, direction: decl.direction };
     const dset = new Set(AI.chooseDiscards(bh, contract).map((c) => c.id));
     d[hs] = bh.filter((c) => !dset.has(c.id));
     if (d[hs].length !== 12) throw new Error('bad hand after discard');

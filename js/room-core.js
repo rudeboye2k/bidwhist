@@ -364,11 +364,14 @@
       if (!bid || (bid.pass && this._mustBid(seat))) return { error: 'must-bid' };
       if (!bid.pass && !E.isLegalBid(bid, this.high, this.rules)) return { error: 'illegal-bid' };
       this.moveNo++;
-      this.bids[seat] = bid.pass ? { pass: true } : { amount: bid.amount, type: bid.type };
+      // A bid is just the number, or the number + No-Trump (see Engine.bidKind).
+      this.bids[seat] = bid.pass ? { pass: true } : { amount: bid.amount, type: E.bidKind(bid.type) };
       if (!bid.pass) {
+        // An app that hasn't refreshed since this change still sends a
+        // direction with the bid (and none at declare) — remember it for them.
+        if (bid.type === 'uptown' || bid.type === 'downtown') this.bids[seat]._dir = bid.type;
         this.bids[seat]._seat = seat;
         this.high = this.bids[seat]; this.highSeat = seat;
-        if (this.seats[seat].kind === 'human') this.plans[seat] = { type: bid.type };
       }
       events.push({ t: 'bid', seat, bid: this.bids[seat] });
       this.bidIndex++;
@@ -388,31 +391,42 @@
         return {};
       }
       events.push({ t: 'auction', highSeat: this.highSeat, bid: this.high });
+      // Highest bid gets the kitty right away; trump and direction get named
+      // with all of it in hand.
+      this._takeKitty(this.highSeat, events);
       this.phase = 'declare';
       this.turn = this.highSeat;
       this.need = this.high.type === 'notrump' ? 'declare-dir' : 'declare-suit';
       return {};
     }
 
-    _applyDeclare(seat, msg, events) {
-      if (this.phase !== 'declare' || seat !== this.highSeat) return { error: 'bad-phase' };
-      let trump = null, direction;
-      if (this.high.type === 'notrump') {
-        if (msg.direction !== 'uptown' && msg.direction !== 'downtown') return { error: 'bad-dir' };
-        direction = msg.direction;
-      } else {
-        if (!E.SUITS.includes(msg.trump)) return { error: 'bad-suit' };
-        trump = msg.trump; direction = this.high.type;
-      }
-      this.moveNo++;
-      this.contract = { amount: this.high.amount, type: this.high.type, trump, direction };
-      events.push({ t: 'declare', seat, contract: this.contract });
-      // Bidder picks up the kitty; kitty book credited if the rule is on.
+    // The high bidder picks up the kitty; its book is credited if the rule is on.
+    _takeKitty(seat, events) {
+      if (!this.kitty) return;
       if (this.rules.kittyIsBook) this.books[seat % 2]++;
       this.hands[seat] = this.hands[seat].concat(this.kitty);
       events.push({ t: 'kitty', seat, sport: !!this.rules.sportKitty,
         cards: this.rules.sportKitty ? this.kitty : null });
       this.kitty = null;
+    }
+
+    _applyDeclare(seat, msg, events) {
+      if (this.phase !== 'declare' || seat !== this.highSeat) return { error: 'bad-phase' };
+      // Plain bid: name the trump suit AND Uptown/Downtown. No-Trump: direction.
+      // (A bid saved before this change may still carry its direction.)
+      let trump = null;
+      const saved = this.high._dir || (this.high.type === 'uptown' || this.high.type === 'downtown' ? this.high.type : null);
+      const direction = msg.direction === 'uptown' || msg.direction === 'downtown' ? msg.direction : saved;
+      if (!direction) return { error: 'bad-dir' };
+      if (this.high.type !== 'notrump') {
+        if (!E.SUITS.includes(msg.trump)) return { error: 'bad-suit' };
+        trump = msg.trump;
+      }
+      this.moveNo++;
+      const type = this.high.type === 'notrump' ? 'notrump' : direction;
+      this.contract = { amount: this.high.amount, type, trump, direction };
+      this._takeKitty(seat, events); // a room saved mid-auction before this change
+      events.push({ t: 'declare', seat, contract: this.contract });
       this.phase = 'discard';
       this.turn = this.highSeat;
       this.need = 'discard';
@@ -691,18 +705,9 @@
         if (!r.bid.pass) this.plans[seat] = r.plan;
         this._applyBid(seat, r.bid, events);
       } else if (this.need === 'declare-suit' || this.need === 'declare-dir') {
-        // A bot has its plan from bidding; a timed-out human gets the best fit.
-        const plan = this.plans[seat] || {};
-        const hand = this.hands[seat];
-        if (this.high.type === 'notrump') {
-          const dir = plan.direction ||
-            (aiLib.evalNoTrump(hand, 'uptown') >= aiLib.evalNoTrump(hand, 'downtown') ? 'uptown' : 'downtown');
-          this._applyDeclare(seat, { direction: dir }, events);
-        } else {
-          const trump = plan.trump ||
-            E.SUITS.slice().sort((a, b) => aiLib.evalTrump(hand, b, this.high.type) - aiLib.evalTrump(hand, a, this.high.type))[0];
-          this._applyDeclare(seat, { trump }, events);
-        }
+        // With the kitty in hand: best trump + direction (or NT direction).
+        const d = aiLib.chooseDeclare(this.hands[seat], this.high.type === 'notrump' ? 'notrump' : 'suit');
+        this._applyDeclare(seat, d, events);
       } else if (this.need === 'discard') {
         const discards = aiLib.chooseDiscards(this.hands[seat], this.contract);
         this._applyDiscard(seat, discards.map((c) => c.id), events);

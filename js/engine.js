@@ -89,9 +89,15 @@
 
   // ---- bidding --------------------------------------------------------------
 
-  // Numeric rank of a bid for comparison. At the same number, no-trump outranks
-  // uptown/downtown; uptown and downtown at the same number are equal, so a
-  // later bidder must go up a number (or to no-trump) to take it.
+  // Bids are just a number (3–7), or a number plus No-Trump ("four no"). The
+  // high bidder takes the kitty and only THEN names trump and Uptown/Downtown
+  // (or, for No-Trump, just Uptown/Downtown) — so a bid's type is 'suit' or
+  // 'notrump'. A four is a four: to beat it, bid five, or four No-Trump.
+  // (Old 'uptown'/'downtown' bid types still compare as 'suit'.)
+  function bidKind(type) { return type === 'notrump' ? 'notrump' : 'suit'; }
+
+  // Numeric rank of a bid for comparison. At the same number, No-Trump outranks
+  // a plain bid; otherwise you must go up a number.
   function bidValue(bid) {
     if (!bid || bid.pass) return 0;
     return bid.amount * 2 + (bid.type === 'notrump' ? 1 : 0);
@@ -107,9 +113,14 @@
 
   function describeBid(bid) {
     if (!bid || bid.pass) return 'Pass';
-    const t = bid.type === 'notrump' ? 'No-Trump'
-      : bid.type === 'downtown' ? 'Downtown' : 'Uptown';
-    return bid.amount + ' ' + t;
+    return bid.type === 'notrump' ? bid.amount + ' No-Trump' : String(bid.amount);
+  }
+
+  // "4 Downtown in Hearts" / "4 No-Trump, Uptown" — a declared contract.
+  function describeContract(c) {
+    if (!c) return '';
+    if (c.type === 'notrump') return `${c.amount} No-Trump, ${c.direction === 'uptown' ? 'Uptown' : 'Downtown'}`;
+    return `${c.amount} ${c.type === 'uptown' ? 'Uptown' : 'Downtown'} in ${SUIT_NAMES[c.trump]}`;
   }
 
   // Books the defenders need to set this bid: 13 - (6 + amount) + 1 = 8 - amount.
@@ -253,7 +264,7 @@
   return {
     SUITS, SUIT_NAMES, SUIT_GLYPHS, DEFAULT_RULES, REACTIONS, cleanRules,
     newDeck, shuffle, deal,
-    bidValue, isLegalBid, describeBid, booksToSet,
+    bidKind, bidValue, isLegalBid, describeBid, describeContract, booksToSet,
     effectiveSuit, rankPower, cardPower, trickLedSuit, legalPlays, allowedPlays, isRenege, trickWinner,
     scoreHand, gameOver,
     cardLabel, rankLabel, sortHand,

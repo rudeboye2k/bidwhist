@@ -33,8 +33,10 @@ function playHand(seed, levels) {
     const { bid, plan } = AI.chooseBid(d[seat], high, r, mustBid, noise, null, seat);
     if (!bid.pass) { bid._seat = seat; high = bid; hs = seat; hp = plan; }
   }
-  const contract = { amount: high.amount, type: high.type, trump: hp.trump, direction: hp.direction };
-  const bh = d[hs].concat(kitty);
+  void hp;
+  const bh = d[hs].concat(kitty); // kitty first, then trump + direction
+  const decl = AI.chooseDeclare(bh, high.type);
+  const contract = { amount: high.amount, type: high.type === 'notrump' ? 'notrump' : decl.direction, trump: decl.trump, direction: decl.direction };
   const ds = new Set(AI.chooseDiscards(bh, contract).map((c) => c.id));
   d[hs] = bh.filter((c) => !ds.has(c.id));
   const memory = new Set();

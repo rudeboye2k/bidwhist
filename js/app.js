@@ -538,8 +538,8 @@
     const r = AI.chooseBid(myHand(), G.high, G.rules, mustBid, Math.random, null, G.viewSeat);
     if (r.bid.pass) return 'Coach: pass on this one.';
     const p = r.plan;
-    const where = p.type === 'notrump' ? `No-Trump, ${p.direction}` : `${p.direction} in ${E.SUIT_NAMES[p.trump]}`;
-    return `Coach: bid <b>${E.describeBid(r.bid)}</b> — you look strongest ${where}.`;
+    const where = p.type === 'notrump' ? `in No-Trump (${p.direction})` : `${p.direction} in ${E.SUIT_NAMES[p.trump]}`;
+    return `Coach: bid <b>${E.describeBid(r.bid)}</b> — you look strongest ${where}, before the kitty.`;
   }
 
   // ---- table record ----------------------------------------------------------------
@@ -863,46 +863,36 @@
     $('action-bar').innerHTML = `<div class="action-hint">${text}</div>`;
   }
 
+  // Bidding: just the number — or the number + No-Trump. Whoever bids highest
+  // takes the kitty, THEN names trump and Uptown/Downtown. A four is a four:
+  // to beat it, bid five, or four No-Trump.
   function showBidPanel(mustBid) {
     const bar = $('action-bar');
     bar.innerHTML = '';
-    const sel = { amount: null, type: 'uptown' };
+    const sel = { amount: null };
 
-    const mkChip = (label, cls) => {
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'chipbtn' + (cls ? ' ' + cls : '');
-      b.textContent = label;
-      return b;
-    };
-
-    const amounts = [], types = {};
+    const amounts = [];
     const amountCol = document.createElement('div'); amountCol.className = 'bid-col';
     const amountRow = document.createElement('div'); amountRow.className = 'bid-group';
-    amountRow.innerHTML = '<span class="lbl">Books over six</span>';
+    amountRow.innerHTML = '<span class="lbl">Your bid (books over six)</span>';
     for (let a = G.rules.minBid; a <= 7; a++) {
-      const b = mkChip(String(a));
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'chipbtn'; b.textContent = String(a);
       b.addEventListener('click', () => { sel.amount = a; refresh(); });
       amounts.push({ a, b }); amountRow.appendChild(b);
     }
     amountCol.appendChild(amountRow);
-
-    const typeRow = document.createElement('div'); typeRow.className = 'bid-group';
-    typeRow.innerHTML = '<span class="lbl">Direction</span>';
-    for (const [t, label] of [['uptown', 'Uptown'], ['downtown', 'Downtown'], ['notrump', 'No-Trump']]) {
-      const b = mkChip(label, 'wide');
-      b.addEventListener('click', () => { sel.type = t; refresh(); });
-      types[t] = b; typeRow.appendChild(b);
-    }
-    amountCol.appendChild(typeRow);
     bar.appendChild(amountCol);
 
-    const goCol = document.createElement('div'); goCol.className = 'bid-col';
+    const goCol = document.createElement('div'); goCol.className = 'bid-col bid-go';
     const bidBtn = document.createElement('button');
-    bidBtn.type = 'button'; bidBtn.className = 'btn primary'; bidBtn.textContent = 'Place Bid';
+    bidBtn.type = 'button'; bidBtn.className = 'btn primary';
+    const ntBtn = document.createElement('button');
+    ntBtn.type = 'button'; ntBtn.className = 'btn primary nt';
     const passBtn = document.createElement('button');
     passBtn.type = 'button'; passBtn.className = 'btn ghost'; passBtn.textContent = 'Pass';
     if (mustBid) { passBtn.disabled = true; passBtn.title = 'Dealer must bid — the table passed to you.'; }
-    goCol.appendChild(bidBtn); goCol.appendChild(passBtn);
+    goCol.appendChild(bidBtn); goCol.appendChild(ntBtn); goCol.appendChild(passBtn);
     bar.appendChild(goCol);
 
     const legal = (a, t) => E.isLegalBid({ amount: a, type: t }, G.high, G.rules);
@@ -910,20 +900,18 @@
     function refresh() {
       // default to the cheapest legal call
       if (sel.amount === null) {
-        outer: for (let a = G.rules.minBid; a <= 7; a++)
-          for (const t of ['uptown', 'notrump'])
-            if (legal(a, t)) { sel.amount = a; if (!legal(a, sel.type)) sel.type = t; break outer; }
+        for (let a = G.rules.minBid; a <= 7; a++) if (legal(a, 'suit') || legal(a, 'notrump')) { sel.amount = a; break; }
       }
       for (const { a, b } of amounts) {
-        b.disabled = !['uptown', 'downtown', 'notrump'].some((t) => legal(a, t));
+        b.disabled = !legal(a, 'suit') && !legal(a, 'notrump');
         b.classList.toggle('on', sel.amount === a);
       }
-      for (const t of Object.keys(types)) {
-        types[t].disabled = sel.amount === null || !legal(sel.amount, t);
-        types[t].classList.toggle('on', sel.type === t);
-      }
-      bidBtn.disabled = sel.amount === null || !legal(sel.amount, sel.type);
-      explain.innerHTML = sel.amount === null ? '' : bidExplain(sel.amount, sel.type);
+      const a = sel.amount;
+      bidBtn.innerHTML = a === null ? 'Bid' : `Bid ${a}`;
+      ntBtn.innerHTML = a === null ? 'No-Trump' : `Bid ${a} No<span class="nt-long">-Trump</span>`;
+      bidBtn.disabled = a === null || !legal(a, 'suit');
+      ntBtn.disabled = a === null || !legal(a, 'notrump');
+      explain.innerHTML = a === null ? '' : bidExplain(a);
     }
     // Plain-English line: what this bid promises.
     const top = document.createElement('div');
@@ -934,43 +922,64 @@
     bar.insertBefore(top, bar.firstChild);
     refresh();
 
-    bidBtn.addEventListener('click', () => {
-      if (G.resolve) G.resolve({ amount: sel.amount, type: sel.type });
-    });
+    bidBtn.addEventListener('click', () => { if (G.resolve) G.resolve({ amount: sel.amount, type: 'suit' }); });
+    ntBtn.addEventListener('click', () => { if (G.resolve) G.resolve({ amount: sel.amount, type: 'notrump' }); });
     passBtn.addEventListener('click', () => { if (G.resolve && !mustBid) G.resolve({ pass: true }); });
   }
 
-  function bidExplain(a, t) {
+  function bidExplain(a) {
     const R = G.rules;
-    const need = 6 + a;
-    const kind = t === 'notrump' ? 'No-Trump' : t === 'downtown' ? 'Downtown' : 'Uptown';
-    const how = t === 'notrump'
-      ? 'no trump suit, jokers are throw-offs' + (R.noTrumpDoubles ? ', scores double' : '')
-      : t === 'downtown' ? 'low cards win (ace still tops)' : 'high cards win';
-    return `<b>${a} ${kind}</b>: your team needs <b>${need}</b> of 13 books` +
-      (R.kittyIsBook ? ' (the kitty counts as one)' : '') + ` — ${how}. They set you with <b>${8 - a}</b>.`;
+    return `<b>${a}</b>: your team needs <b>${6 + a}</b> of 13 books` +
+      (R.kittyIsBook ? ' (the kitty counts as one)' : '') +
+      `. Win the bid, take the kitty, then name trump and Uptown or Downtown. ` +
+      `<b>${a} No-Trump</b> beats a ${a}` + (R.noTrumpDoubles ? ' and scores double' : '') +
+      `. They set you with <b>${8 - a}</b>.`;
   }
 
+  // You won the bid and the kitty's in your hand: pick the trump suit AND
+  // the direction, then confirm.
   function showDeclareSuit() {
     const bar = $('action-bar');
-    bar.innerHTML = '<div class="action-hint">Name your trump:</div>';
-    const row = document.createElement('div'); row.className = 'bid-group';
+    bar.innerHTML = '<div class="action-hint declare-hint">You won it — the kitty&rsquo;s in your hand. Name trump and pick a direction:</div>';
+    const sel = { trump: null, direction: null };
+    const hand = G.hands[G.viewSeat].filter((c) => !c.back);
+    const suitRow = document.createElement('div'); suitRow.className = 'bid-group';
+    const suitBtns = {};
     for (const s of E.SUITS) {
-      const count = G.hands[G.viewSeat].filter((c) => c.suit === s).length;
+      const count = hand.filter((c) => c.suit === s).length;
       const b = document.createElement('button');
-      b.type = 'button'; b.className = 'chipbtn wide';
-      b.style.color = (s === 'H' || s === 'D') ? '#e0705f' : '';
-      b.innerHTML = `${E.SUIT_GLYPHS[s]} <small>(${count})</small>`;
+      b.type = 'button'; b.className = 'chipbtn wide suit-pick suit-' + s + ((s === 'H' || s === 'D') ? ' red' : '');
+      b.innerHTML = `${E.SUIT_GLYPHS[s]} <small>${E.SUIT_NAMES[s]} (${count})</small>`;
       b.title = E.SUIT_NAMES[s];
-      b.addEventListener('click', () => { if (G.resolve) G.resolve(s); });
-      row.appendChild(b);
+      b.addEventListener('click', () => { sel.trump = s; refresh(); });
+      suitBtns[s] = b; suitRow.appendChild(b);
     }
-    bar.appendChild(row);
+    const dirRow = document.createElement('div'); dirRow.className = 'bid-group';
+    const dirBtns = {};
+    for (const [d, label] of [['uptown', 'Uptown <small>(high wins)</small>'], ['downtown', 'Downtown <small>(low wins)</small>']]) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'chipbtn wide'; b.innerHTML = label;
+      b.addEventListener('click', () => { sel.direction = d; refresh(); });
+      dirBtns[d] = b; dirRow.appendChild(b);
+    }
+    const go = document.createElement('button');
+    go.type = 'button'; go.className = 'btn primary';
+    go.addEventListener('click', () => { if (sel.trump && sel.direction && G.resolve) G.resolve({ trump: sel.trump, direction: sel.direction }); });
+    function refresh() {
+      for (const s of E.SUITS) suitBtns[s].classList.toggle('on', sel.trump === s);
+      for (const d of Object.keys(dirBtns)) dirBtns[d].classList.toggle('on', sel.direction === d);
+      go.disabled = !(sel.trump && sel.direction);
+      go.textContent = sel.trump && sel.direction
+        ? `${E.SUIT_NAMES[sel.trump]} · ${sel.direction === 'uptown' ? 'Uptown' : 'Downtown'}`
+        : 'Name Trump';
+    }
+    bar.appendChild(suitRow); bar.appendChild(dirRow); bar.appendChild(go);
+    refresh();
   }
 
   function showDeclareDirection() {
     const bar = $('action-bar');
-    bar.innerHTML = '<div class="action-hint">No-Trump — which way does it run?</div>';
+    bar.innerHTML = '<div class="action-hint">You won it in No-Trump — the kitty&rsquo;s in your hand. Which way does it run?</div>';
     const row = document.createElement('div'); row.className = 'bid-group';
     for (const [d, label] of [['uptown', 'Uptown (high wins)'], ['downtown', 'Downtown (low wins)']]) {
       const b = document.createElement('button');
@@ -1416,8 +1425,9 @@
     renderScores(); renderContractLine(); renderPlates(); renderRecordLine();
     renderOppHands(); renderBidChips(); renderSeatsMeta(view.turn);
     startTurnClock(view);
-    // The pile stays on the felt until the high bidder actually takes it.
-    renderKitty(view.phase === 'bidding' || view.phase === 'declare' ? 'back' : 'gone');
+    // The pile sits on the felt through the bidding; the high bidder takes it
+    // the moment the auction closes.
+    renderKitty(view.phase === 'bidding' ? 'back' : 'gone');
     renderHand();
     setupTurn(view);
   }
@@ -1464,20 +1474,18 @@
       showBidPanel(!!(view.you && view.you.mustBid));
       tableMsg('Your call.');
     } else if (view.need === 'declare-suit') {
-      G.resolve = (suit) => send({ type: 'declare', trump: suit });
+      G.resolve = (d) => send({ type: 'declare', trump: d.trump, direction: d.direction });
       showDeclareSuit();
       if (coachOn()) {
-        const p = AI.bestPlan(myHand());
-        const best = E.SUITS.slice().sort((a, b) => AI.evalTrump(myHand(), b, G.high.type) - AI.evalTrump(myHand(), a, G.high.type))[0];
-        void p;
-        coachLine(`Coach: name <b>${E.SUIT_GLYPHS[best]} ${E.SUIT_NAMES[best]}</b> — it's your strongest ${G.high.type} suit.`);
+        const d = AI.chooseDeclare(myHand(), 'suit');
+        coachLine(`Coach: name <b>${E.SUIT_GLYPHS[d.trump]} ${E.SUIT_NAMES[d.trump]}, ${d.direction === 'uptown' ? 'Uptown' : 'Downtown'}</b> — your strongest pick with the kitty.`);
       }
     } else if (view.need === 'declare-dir') {
       G.resolve = (dir) => send({ type: 'declare', direction: dir });
       showDeclareDirection();
       if (coachOn()) {
-        const up = AI.evalNoTrump(myHand(), 'uptown'), down = AI.evalNoTrump(myHand(), 'downtown');
-        coachLine(`Coach: run it <b>${up >= down ? 'Uptown' : 'Downtown'}</b> — your ${up >= down ? 'high' : 'low'} cards are stronger.`);
+        const up = AI.chooseDeclare(myHand(), 'notrump').direction === 'uptown';
+        coachLine(`Coach: run it <b>${up ? 'Uptown' : 'Downtown'}</b> — your ${up ? 'high' : 'low'} cards are stronger.`);
       }
     } else if (view.need === 'discard') {
       G.awaiting = 'discard'; G.discardPicks = new Set();
@@ -1640,7 +1648,7 @@
     const stamp = $('summary-stamp');
     stamp.className = 'stamp ' + (r.made ? 'made' : 'set');
     stamp.textContent = r.made ? (r.boston ? 'BOSTON!' : 'BID MADE') : 'SET!';
-    $('summary-title').textContent = `${seatName(r.highSeat)} bid ${E.describeBid(r.bid)}`;
+    $('summary-title').textContent = `${seatName(r.highSeat)} bid ${r.contract ? E.describeContract(r.contract) : E.describeBid(r.bid)}`;
     const us = myTeam(), them = 1 - us;
     const deltaCls = (bidTeam === myTeam() ? r.delta >= 0 : r.delta < 0) ? 'pos' : 'neg';
     $('summary-body').innerHTML =

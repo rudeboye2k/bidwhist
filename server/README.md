@@ -72,7 +72,7 @@ Client → server:
 | `{type:'hello', name, avatar?, token?}` | join a seat (with a name + optional avatar), or reclaim one with a saved token |
 | `{type:'start'}` | host only — fill empty seats with AI and deal |
 | `{type:'nextHand'}` | host only — deal the next hand after one ends |
-| `{type:'intent', intent}` | a move: `{type:'bid'\|'declare'\|'discard'\|'play', ...}` |
+| `{type:'intent', intent}` | a move: `{type:'bid'\|'declare'\|'discard'\|'play', ...}` — a bid is `{amount, type:'suit'\|'notrump'}`; after the auction the high bidder already holds the kitty and declares `{trump, direction}` (No-Trump: `{direction}`) |
 | `{type:'profile', name?, avatar?}` | update your display name / avatar mid-session |
 | `{type:'team', team}` | lobby only — move to Team A (`0`) or B (`1`); this picks your partner |
 | `{type:'teamName', team, name}` | team captain only (first player on the team) — rename it (≤ 18 chars) |

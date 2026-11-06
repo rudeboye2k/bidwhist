@@ -68,7 +68,7 @@ function autoAct(room, token) {
     const bid = v.you.mustBid ? { amount: room.rules.minBid, type: 'uptown' } : { pass: true };
     room.submit(token, { type: 'bid', bid });
   } else if (room.need === 'declare-suit') {
-    room.submit(token, { type: 'declare', trump: 'S' });
+    room.submit(token, { type: 'declare', trump: 'S', direction: 'uptown' });
   } else if (room.need === 'declare-dir') {
     room.submit(token, { type: 'declare', direction: 'uptown' });
   } else if (room.need === 'discard') {
@@ -132,7 +132,7 @@ check('rooms have distinct codes', r1.code !== r2.code);
   // play a few moves, then "evict" and restore several times along the way
   let moves = 0, restores = 0, g = 0;
   while (r.phase !== 'gameover' && g++ < 100000) {
-    if (moves % 7 === 3) { r = Room.fromJSON(structuredClone(r.toJSON())); restores++; }
+    if (moves % 3 === 1) { r = Room.fromJSON(structuredClone(r.toJSON())); restores++; }
     if (r.phase === 'handover') { r.nextHand(p1.token); moves++; continue; }
     const tok = r.turn === 0 ? p1.token : r.turn === 1 ? p2.token : null;
     if (!tok || !autoAct(r, tok)) break;
@@ -365,6 +365,56 @@ check('rooms have distinct codes', r1.code !== r2.code);
     }
   }
   check('found a deal to test a renege on', found);
+}
+
+// ---- bidding: a four is a four; kitty first, THEN trump + direction ----
+{
+  const E = require('../js/engine.js');
+  check('bids are just a number: 4 does not beat 4', !E.isLegalBid({ amount: 4, type: 'suit' }, { amount: 4, type: 'suit' }));
+  check('4 No-Trump beats a 4', E.isLegalBid({ amount: 4, type: 'notrump' }, { amount: 4, type: 'suit' }));
+  check('5 beats 4 No-Trump', E.isLegalBid({ amount: 5, type: 'suit' }, { amount: 4, type: 'notrump' }));
+  check('a bid reads as just the number', E.describeBid({ amount: 4, type: 'suit' }) === '4' && E.describeBid({ amount: 4, type: 'notrump' }) === '4 No-Trump');
+  let tested = false, lastEvents = [];
+  for (let seed = 500; seed < 700 && !tested; seed++) {
+    const r = new Room('BID', {}, { rng: seeded(seed) });
+    const a = r.join('Ann'); r.join('Ben');
+    lastEvents = r.start(a.token).events.slice();
+    // Ann (seat 0) bids 7 if she gets the chance, so she wins the auction
+    let g = 0;
+    while (r.phase === 'bidding' && g++ < 10) {
+      if (r.turn !== 0) { lastEvents.push(...(r.submit(r.seats[r.turn].token, { type: 'bid', bid: { pass: true } }).events || [])); continue; }
+      lastEvents.push(...(r.submit(a.token, { type: 'bid', bid: { amount: 7, type: 'uptown' } }).events || [])); // old clients may still send a direction
+    }
+    if (r.phase !== 'declare' || r.highSeat !== 0) continue;
+    tested = true;
+    check('auction closes straight into the kitty pickup', lastEvents.some((e) => e.t === 'kitty' && e.seat === 0) && !lastEvents.some((e) => e.t === 'declare'));
+    check('a bid with a direction attached is stored as just the number', r.high.type === 'suit');
+    check('high bidder already holds the kitty before naming trump (18 cards)', r.hands[0].length === 18 && r.kitty === null);
+    check('an old app (direction sent with the bid) can still name trump alone', r.high._dir === 'uptown');
+    delete r.high._dir; // a current app: direction comes with the trump
+    check('naming trump without Uptown/Downtown is refused', r.submit(a.token, { type: 'declare', trump: 'H' }).error === 'bad-dir');
+    const out = r.submit(a.token, { type: 'declare', trump: 'H', direction: 'downtown' });
+    check('trump + direction named after the kitty', !out.error && r.contract.trump === 'H' && r.contract.type === 'downtown' && r.contract.direction === 'downtown');
+    check('then bury', r.need === 'discard' && r.phase === 'discard');
+  }
+  check('found a deal where Ann wins the bid', tested);
+  // bots declare after seeing the kitty too
+  const r2 = new Room('BOTDECL', {}, { rng: seeded(32) });
+  const h2 = r2.join('Hal');
+  const evs = [];
+  const push = (o) => { if (o && o.events) evs.push(...o.events); };
+  push(r2.start(h2.token));
+  let k = 0;
+  while (r2.phase !== 'playing' && r2.phase !== 'handover' && k++ < 50) {
+    if (r2.turn !== 0) break;
+    const v = r2.viewFor(h2.token);
+    if (r2.need === 'bid') push(r2.submit(h2.token, { type: 'bid', bid: v.you.mustBid ? { amount: 3, type: 'suit' } : { pass: true } }));
+    else autoAct(r2, h2.token);
+  }
+  const decl = evs.find((e) => e.t === 'declare');
+  const ki = evs.findIndex((e) => e.t === 'kitty'), di = evs.findIndex((e) => e.t === 'declare');
+  check('bots: kitty is picked up before trump is named', decl && ki >= 0 && ki < di);
+  check('bots name a real direction', decl && ['uptown', 'downtown', 'notrump'].includes(decl.contract.type) && decl.contract.direction);
 }
 
 if (failures) { console.error('\n' + failures + ' failure(s)'); process.exit(1); }

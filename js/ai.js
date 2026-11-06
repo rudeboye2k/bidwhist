@@ -101,9 +101,11 @@
   //     over/under-shoot, surfaced to the UI as the table's "read" on you.
 
   // Wide band + slow EWMA: natural make-rate variance stays inside the band, so
-  // bidBias holds at 0 during healthy play. Only a sustained drift (a rule set
+  // bidBias holds at 0 during healthy play. (Since the bidder sees the kitty
+  // before naming trump, bots make ~83% of contracts; the top of the band sits
+  // above that, so a good run doesn't goad them into overbidding.) Only a sustained drift (a rule set
   // the static tuning doesn't fit) pushes the EWMA out far enough to react.
-  const HEALTHY_LO = 0.58, HEALTHY_HI = 0.92;
+  const HEALTHY_LO = 0.58, HEALTHY_HI = 0.97;
 
   function seatModel() { return { declares: 0, avgBid: 0, surplus: 0, madeRate: 0.6 }; }
 
@@ -160,24 +162,45 @@
 
     // Minimum bid that beats the table. Our type matters: no-trump can match
     // the current number; uptown/downtown must exceed it.
+    // The bid itself is just the number (or the number + No-Trump); trump and
+    // direction get named after the kitty (see chooseDeclare).
+    const type = Engine.bidKind(plan.type);
     const cur = Engine.bidValue(currentHigh);
     let amount = rules.minBid;
     while (
       amount <= 7 &&
-      !Engine.isLegalBid({ amount, type: plan.type }, currentHigh, rules)
+      !Engine.isLegalBid({ amount, type }, currentHigh, rules)
     ) amount++;
 
     if (amount <= 7 && amount <= maxAmount)
-      return { bid: { amount, type: plan.type }, plan };
+      return { bid: { amount, type }, plan };
 
     if (mustBid) {
       // Dealer stuck by three passes: bid the floor with the best plan.
       let a = rules.minBid;
-      while (!Engine.isLegalBid({ amount: a, type: plan.type }, currentHigh, rules)) a++;
-      return { bid: { amount: Math.min(a, 7), type: plan.type }, plan };
+      while (!Engine.isLegalBid({ amount: a, type }, currentHigh, rules)) a++;
+      return { bid: { amount: Math.min(a, 7), type }, plan };
     }
     void cur;
     return { bid: { pass: true }, plan };
+  }
+
+  // ---- naming trump ---------------------------------------------------------
+
+  // After winning the bid and picking up the kitty (all 18 cards in hand): a
+  // plain bid names the best trump suit AND direction; a No-Trump bid picks
+  // the better direction.
+  function chooseDeclare(hand, bidType) {
+    if (bidType === 'notrump') {
+      return { trump: null, direction: evalNoTrump(hand, 'uptown') >= evalNoTrump(hand, 'downtown') ? 'uptown' : 'downtown' };
+    }
+    let best = null;
+    for (const trump of ['S', 'H', 'D', 'C'])
+      for (const direction of ['uptown', 'downtown']) {
+        const est = evalTrump(hand, trump, direction);
+        if (!best || est > best.est) best = { trump, direction, est };
+      }
+    return { trump: best.trump, direction: best.direction };
   }
 
   // ---- kitty discard --------------------------------------------------------
@@ -290,7 +313,7 @@
   }
 
   return {
-    bestPlan, evalTrump, evalNoTrump, chooseBid, chooseDiscards, choosePlay,
+    bestPlan, evalTrump, evalNoTrump, chooseBid, chooseDeclare, chooseDiscards, choosePlay,
     createLearner, observeHand,
   };
 });

@@ -142,15 +142,16 @@ players in fixed partnerships, a 54-card deck (52 cards plus both jokers),
 makes **13 books** per hand.
 
 - **The auction.** Starting left of the dealer, each player gets one call:
-  pass, or bid **3–7** as **Uptown** (high cards win), **Downtown** (A, 2, 3 …
-  K — after the ace, low wins), or **No-Trump**. A bid promises *six plus the
-  bid* books: bid 4 means 10 books. At the same number No-Trump outranks the
-  others; Uptown and Downtown tie, so you must raise the number to beat one
-  with the other. If the first three players pass, the dealer is stuck with a
-  minimum bid.
-- **The kitty.** The high bidder names trump (or the direction, for No-Trump),
-  takes all six kitty cards, and buries six — and the buried book counts as the
-  bidding team's first book.
+  pass, or bid a number **3–7** — just the number — or that number
+  **No-Trump** ("four no"). A bid promises *six plus the bid* books: bid 4
+  means 10 books. A four is a four: to beat it, bid five, or four No-Trump.
+  If the first three players pass, the dealer is stuck with a minimum bid.
+- **The kitty.** Whoever bids highest takes all six kitty cards, *then* names
+  trump and picks **Uptown** (high cards win) or **Downtown** (A, 2, 3 … K —
+  after the ace, low wins); a No-Trump winner just picks the direction. Then
+  they bury six — and the buried book counts as the bidding team's first book.
+  You're bidding on your hand alone, guessing at the kitty and what the others
+  hold.
 - **The play.** The bidder leads. Follow suit if you can. The Big and Little
   Jokers are the top two trumps. In No-Trump the jokers are throw-offs: they
   can never win a book, can't be led (unless they're all you have left), and
