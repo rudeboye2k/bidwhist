@@ -77,6 +77,7 @@
     // ---- membership --------------------------------------------------------
 
     seatOf(token) {
+      if (token == null) return null; // no token never matches an (empty) seat
       const s = this.seats.find((x) => x.token === token);
       return s ? s.seat : null;
     }

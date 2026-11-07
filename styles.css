@@ -1361,3 +1361,17 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
   .trump-call, .trump-call.show { transition: none; }
   .trump-badge.pulse { animation: none; }
 }
+
+/* lobby: who you're playing as (editable) — the profile editor opens above it */
+#modal-profile { z-index: 70; }
+.lobby-me { margin: 0 0 12px; padding: 8px 12px; }
+.lobby-me[hidden] { display: none; }
+.lobby-me .avatar.big { width: 44px; height: 44px; font-size: 24px; }
+.lobby-me .profile-summary-name { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+.lobby-me .profile-summary-name small { font-family: var(--font-body); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--gold-dim); }
+.lobby-me #lobby-pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 600px) {
+  .lobby-me { flex-wrap: nowrap; }
+  .lobby-me .btn.small { padding: 6px 9px; font-size: 10px; white-space: nowrap; }
+}
+#modal-lobby .modal { max-width: 560px; }

@@ -1636,10 +1636,11 @@
         if (s.kind === 'empty') { av.classList.add('seat-empty'); av.textContent = '+'; }
         else applyAvatar(av, avatarFrom(s.avatar, (s.name || 'seat') + '#' + s.seat));
         const nm = document.createElement('span'); nm.className = 'r-name';
-        nm.textContent = s.kind === 'empty' ? (view.hostToken ? 'Open' : 'Open seat') : (s.you ? 'You' : (s.name || 'Player'));
+        nm.textContent = s.kind === 'empty' ? (view.hostToken ? 'Open' : 'Open seat') : (s.name || 'Player');
         if (s.seat === info.captainSeat) { nm.insertAdjacentHTML('afterbegin', '<span class="cap-star" title="Team captain">★</span>'); }
         li.appendChild(av); li.appendChild(nm);
         const tags = [];
+        if (s.you) tags.push('<span class="r-tag you">you</span>');
         if (s.isHost) tags.push('<span class="r-tag host">host</span>');
         if (s.kind === 'ai' && !view.hostToken) tags.push('<span class="r-tag">bot</span>'); // host sees a Kick button instead
         else if (s.kind === 'human' && !s.connected) tags.push('<span class="r-tag">away</span>');
@@ -1690,9 +1691,20 @@
         : 'The table\'s full — you\'re watching. You can take a seat if one opens.';
     }
     $('lobby-watchers').textContent = view.watchers ? `${view.watchers} watching` : '';
+    renderLobbyMe(view);
     $('modal-online').classList.remove('show');
     $('splash').classList.remove('show');
     $('modal-lobby').classList.add('show');
+  }
+
+  // "Playing as" strip in the lobby: your name + avatar as the table sees
+  // them, with a button to change them before the deal.
+  function renderLobbyMe(view) {
+    const me = view.seats.find((x) => x.you);
+    $('lobby-me').hidden = !me;
+    if (!me) return;
+    applyAvatar($('lobby-avatar'), avatarFrom(me.avatar || G.profile.avatar, (me.name || 'seat') + '#' + me.seat));
+    $('lobby-pname').textContent = me.name || G.profile.name;
   }
 
   function showOnlineSummary(r) {
@@ -1943,6 +1955,7 @@
   // Profile editor wiring.
   $('btn-profile').addEventListener('click', openProfileEditor);
   $('btn-edit-profile').addEventListener('click', openProfileEditor);
+  $('btn-lobby-profile').addEventListener('click', openProfileEditor);
   $('splash-profile').addEventListener('click', openProfileEditor);
   $('btn-profile-cancel').addEventListener('click', () => $('modal-profile').classList.remove('show'));
   $('btn-profile-save').addEventListener('click', saveProfileFromEditor);

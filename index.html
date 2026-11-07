@@ -33,7 +33,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Libre+Franklin:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=13">
+<link rel="stylesheet" href="styles.css?v=14">
 <script>try{var L=localStorage,d=document.documentElement,f=L.getItem('bidwhist.felt');if(f)d.setAttribute('data-felt',f);if(L.getItem('bidwhist.bigCards')==='on')d.setAttribute('data-cards','big');if(L.getItem('bidwhist.fourColor')==='on')d.setAttribute('data-deck','four')}catch(e){}</script>
 </head>
 <body>
@@ -235,6 +235,11 @@
           <button class="btn ghost" id="btn-copy-key" type="button">Copy key only</button>
         </div>
       </div>
+      <div class="profile-summary lobby-me" id="lobby-me">
+        <span class="avatar big" id="lobby-avatar"></span>
+        <span class="profile-summary-name"><small>Playing as</small><span id="lobby-pname">You</span></span>
+        <button class="btn ghost small" id="btn-lobby-profile" type="button">Edit name &amp; avatar</button>
+      </div>
       <p class="teams-hint" id="teams-hint">Pick a team to choose your partner. The first player on a team is its captain and names it.</p>
       <div class="teams" id="lobby-teams"></div>
       <button class="btn primary big" id="btn-start-online" type="button">Start Game</button>
@@ -370,17 +375,17 @@
   </div>
 </div>
 
-<script src="js/engine.js?v=13"></script>
-<script src="js/ai.js?v=13"></script>
+<script src="js/engine.js?v=14"></script>
+<script src="js/ai.js?v=14"></script>
 <script>
   // The site and the game server are one Cloudflare Worker, so the server is
   // simply this page's own address — nothing to configure. Only if you host the
   // page somewhere else (e.g. GitHub Pages) would you point it at the Worker:
   // window.BIDWHIST_SERVER = "https://bidwhist.<your-subdomain>.workers.dev";
 </script>
-<script src="js/room-core.js?v=13"></script>
-<script src="js/qrcode.js?v=13"></script>
-<script src="js/net.js?v=13"></script>
-<script src="js/app.js?v=13"></script>
+<script src="js/room-core.js?v=14"></script>
+<script src="js/qrcode.js?v=14"></script>
+<script src="js/net.js?v=14"></script>
+<script src="js/app.js?v=14"></script>
 </body>
 </html>

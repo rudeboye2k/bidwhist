@@ -417,5 +417,15 @@ check('rooms have distinct codes', r1.code !== r2.code);
   check('bots name a real direction', decl && ['uptown', 'downtown', 'notrump'].includes(decl.contract.type) && decl.contract.direction);
 }
 
+// ---- a team with nobody on it has no captain (not the first open seat) ----
+{
+  const r = new Room('CAPT', {});
+  const a = r.join('Ann'); r.join('Ben'); // seats 0 (A) and 1 (B)
+  r.chooseTeam(r.seats[1].token, 0);      // Ben joins Team A → Team B is empty
+  const v = r.viewFor(a.token);
+  check('empty team shows no captain', v.teams[1].captainSeat === null);
+  check('a watcher (no token) is never mapped to an open seat', r.seatOf(null) === null && r.viewFor(null).you === null);
+}
+
 if (failures) { console.error('\n' + failures + ' failure(s)'); process.exit(1); }
 console.log('\nAll room-core tests passed.');

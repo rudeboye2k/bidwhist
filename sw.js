@@ -3,7 +3,7 @@
  * last copy cached here when there's no signal. Solo play needs nothing from
  * the server, so a phone that's been here once can play the computer offline.
  * Online play (/api/*) is never cached. */
-const CACHE = 'gmdk-v3';
+const CACHE = 'gmdk-v4';
 const SHELL = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'js/engine.js', 'js/ai.js', 'js/room-core.js', 'js/qrcode.js', 'js/net.js', 'js/app.js',
