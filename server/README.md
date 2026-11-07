@@ -80,6 +80,7 @@ Client → server:
 | `{type:'addBot', seat}` / `{type:'kickBot', seat}` | host, lobby only — put a bot in an open seat / remove one |
 | `{type:'toLobby'}` | host, after a game — reopen the lobby (seats kept, scores reset) |
 | `{type:'leave'}` | give up your seat — mid-game a bot takes it for good and plays at once |
+| `{type:'say', text}` | a typed message (plain text, ≤ 60 chars, markup stripped; shares the reaction pace limit) |
 | `{type:'react', id}` | pop a quick reaction over your seat (`Engine.REACTIONS[id]`; ~1 per 1.2 s) |
 | `{type:'rules', rules}` | host only, between hands — set the house rules (cleaned by `Engine.cleanRules`) |
 | `{type:'renege'}` | renege rule only, during play — call a renege on the other team |

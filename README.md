@@ -40,7 +40,9 @@ online play is powered by a small Cloudflare Worker.
   it — for about 2½ seconds before the first card (a tap skips it; your own
   call gets a short confirmation).
 - **Talk at the table:** 💬 pops a quick call-out or emoji over your seat
-  ("Run a Boston!", "Set 'em!", 😂 …); the bots talk a little trash too.
+  ("Run a Boston!", "Set 'em!", 😂 …) — or type your own (one line, up to 60
+  characters, plain text). Messages show over your seat and in Table Talk;
+  the bots talk a little trash too.
 - **Table record:** wins, Bostons, sets, best bidder and (online) best duo
   across games at the table, on the game-over screen; solo also keeps an
   all-time record vs the computer.

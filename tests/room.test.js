@@ -427,5 +427,21 @@ check('rooms have distinct codes', r1.code !== r2.code);
   check('a watcher (no token) is never mapped to an open seat', r.seatOf(null) === null && r.viewFor(null).you === null);
 }
 
+// ---- typed messages ----
+{
+  let now = 5000000;
+  const r = new Room('SAY', {}, { now: () => now });
+  const a = r.join('Ann');
+  const ok = r.say(a.token, '  Run it   <b>back</b>, partner!  ');
+  check('a typed message is broadcast', ok.events && ok.events[0].t === 'say' && ok.events[0].seat === 0);
+  check('markup stripped and spaces tidied', ok.events[0].text === 'Run it bback/b, partner!');
+  check('messages share the reaction pace limit', r.say(a.token, 'again').error === 'slow-down');
+  now += 2000;
+  check('long messages are cut to 60 characters', r.say(a.token, 'x'.repeat(200)).events[0].text.length === 60);
+  now += 2000;
+  check('empty messages are refused', r.say(a.token, '   ').error === 'empty-message');
+  check('watchers can\'t type at the table', r.say('nobody', 'hi').error === 'not-seated');
+}
+
 if (failures) { console.error('\n' + failures + ' failure(s)'); process.exit(1); }
 console.log('\nAll room-core tests passed.');

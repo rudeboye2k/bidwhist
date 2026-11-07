@@ -160,6 +160,7 @@ export class GameRoom {
     else if (msg.type === 'kickBot') out = this.room.kickBot(meta.token, msg.seat);
     else if (msg.type === 'toLobby') out = this.room.toLobby(meta.token);
     else if (msg.type === 'react') out = this.room.react(meta.token, msg.id);
+    else if (msg.type === 'say') out = this.room.say(meta.token, msg.text);
     else if (msg.type === 'rules') out = this.room.setRules(meta.token, msg.rules);
     else if (msg.type === 'renege') out = this.room.callRenege(meta.token);
     else if (msg.type === 'leave') {
@@ -170,7 +171,7 @@ export class GameRoom {
 
     if (out && out.error) return this._send(ws, { type: 'error', error: out.error });
     // Reactions are just chatter: no need to persist the room for them.
-    if (msg.type !== 'react') await this._save();
+    if (msg.type !== 'react' && msg.type !== 'say') await this._save();
     this._broadcast(out && out.events);
   }
 

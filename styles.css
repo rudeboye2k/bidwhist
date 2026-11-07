@@ -1376,3 +1376,32 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
 }
 #modal-lobby .modal { max-width: 560px; }
 .hand.watching .card { cursor: default; animation: none; }
+
+/* type your own message (💬 window) */
+.react-say { grid-column: 1 / -1; display: flex; gap: 6px; margin-top: 3px; }
+.react-say input {
+  flex: 1; min-width: 0; font-family: var(--font-body); font-size: 16px; color: var(--cream);
+  background: rgba(0, 0, 0, .4); border: 1px solid var(--gold-dim); border-radius: 10px; padding: 7px 10px;
+}
+.react-say input:focus { outline: none; border-color: var(--gold-bright); }
+.react-say .btn { flex-shrink: 0; }
+.react-bubble.long { white-space: normal; width: max-content; max-width: 220px; text-align: center; font-size: 13.5px; line-height: 1.3; }
+@media (max-width: 600px) { .react-bubble.long { max-width: 150px; font-size: 12px; } }
+
+/* 💬 window: phrases two across, emoji six across, typing box underneath */
+.react-menu { grid-template-columns: repeat(6, minmax(0, 1fr)); width: 300px; max-width: none; }
+.react-opt { grid-column: span 3; overflow: hidden; text-overflow: ellipsis; }
+.react-opt.emoji { grid-column: span 1; font-size: 19px; padding: 5px 0; }
+@media (max-width: 600px) {
+  /* on phones it's a panel along the bottom of the screen (room for the keyboard) */
+  .react-menu {
+    position: fixed; left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right));
+    bottom: max(10px, env(safe-area-inset-bottom)); top: auto; width: auto; z-index: 80;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, .7);
+  }
+  .react-opt { font-size: 13px; padding: 9px 9px; }
+  .react-opt.emoji { font-size: 22px; padding: 6px 0; }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .react-menu { grid-template-columns: repeat(6, minmax(0, 1fr)); width: 320px; }
+}

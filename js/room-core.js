@@ -593,6 +593,19 @@
       return { events: [{ t: 'react', seat, id }] };
     }
 
+    // A typed message from a seated player: plain text, one line, ≤ 60
+    // characters, same pace limit as reactions.
+    say(token, text) {
+      const seat = this.seatOf(token);
+      if (seat === null) return { error: 'not-seated' };
+      const clean = typeof text === 'string' ? stripMarkup(text).slice(0, 60).trim() : '';
+      if (!clean) return { error: 'empty-message' };
+      const now = this.now();
+      if (now - (this.reactAt[seat] || 0) < 1200) return { error: 'slow-down' };
+      this.reactAt[seat] = now;
+      return { events: [{ t: 'say', seat, text: clean }] };
+    }
+
     // Bots talk a little trash at the end of a hand.
     _banter(bidTeam, res, events) {
       const bots = (team) => [team, team + 2].filter((n) => this.seats[n].kind === 'ai');

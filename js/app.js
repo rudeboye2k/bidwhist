@@ -525,6 +525,22 @@
       });
       m.appendChild(b);
     });
+    // Or type your own.
+    const form = document.createElement('form');
+    form.className = 'react-say';
+    form.innerHTML = '<input type="text" maxlength="60" placeholder="Say something…" aria-label="Type a message" autocomplete="off" enterkeyhint="send">' +
+      '<button type="submit" class="btn primary small">Send</button>';
+    const input = form.querySelector('input');
+    form.addEventListener('click', (e) => e.stopPropagation());
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (!text || !Online.conn) return;
+      Online.conn.send({ type: 'say', text });
+      input.value = '';
+      toggleReactMenu(false);
+    });
+    m.appendChild(form);
   }
   function toggleReactMenu(open) {
     const m = $('react-menu');
@@ -534,15 +550,20 @@
   }
   function showReaction(seat, id) {
     const text = E.REACTIONS[id]; if (!text) return;
+    showBubble(seat, text);
+  }
+  function esc(t) { return String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  function showBubble(seat, text) {
     const host = $('seat-' + slot(seat)); if (!host) return;
     host.querySelectorAll('.react-bubble').forEach((b) => b.remove());
     const b = document.createElement('div');
-    b.className = 'react-bubble' + (text.length <= 2 ? ' emoji' : '');
+    b.className = 'react-bubble' + (text.length <= 2 ? ' emoji' : '') + (text.length > 18 ? ' long' : '');
     b.textContent = text;
     host.appendChild(b);
     Sound.play('turn');
     if (!isMe(seat)) announce(`${seatName(seat)}: ${text}`);
-    setTimeout(() => b.remove(), 2800);
+    setTimeout(() => b.remove(), text.length > 18 ? 4200 : 2800);
+    if (text.length > 18) b.style.animationDuration = '4.2s';
   }
 
   // ---- coach --------------------------------------------------------------------
@@ -1129,6 +1150,7 @@
           case 'intent': out = room.submit(token, msg.intent); break;
           case 'profile': out = room.setProfile(token, msg.name, msg.avatar); break;
           case 'react': out = room.react(token, msg.id); break;
+          case 'say': out = room.say(token, msg.text); break;
           case 'rules': out = room.setRules(token, msg.rules); break;
           case 'renege': out = room.callRenege(token); break;
           default: return;
@@ -1380,6 +1402,10 @@
           break;
         case 'react':
           showReaction(ev.seat, ev.id);
+          break;
+        case 'say':
+          showBubble(ev.seat, ev.text);
+          log(`<b>${esc(seatName(ev.seat))}</b>: ${esc(ev.text)}`);
           break;
         case 'renege':
           if (ev.ok) {
