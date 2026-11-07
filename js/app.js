@@ -15,6 +15,9 @@
   // 1 west, 2 north (partner), 3 east.
   function slot(seat) { return (seat - G.viewSeat + 4) % 4; }
   function myTeam() { return G.viewSeat % 2; }
+  // Is this seat the person at this screen? Never true for a watcher, who
+  // just sees the table from seat 1's side.
+  function isMe(seat) { return seat === G.viewSeat && !(typeof Online !== 'undefined' && Online.watching); }
   // Online, teams carry the names their captains chose; solo it's Us / Them.
   function teamLabel(team) {
     if (G.mode === 'online' && G.view && G.view.teams && G.view.teams[team]) return G.view.teams[team].name;
@@ -24,17 +27,17 @@
   function amHost() { return G.view ? !!G.view.hostToken : !!(typeof Online !== 'undefined' && Online.isHost); }
   function seatName(seat) {
     if (G.view && G.view.seats) {
-      if (seat === G.viewSeat) return 'You';
+      if (isMe(seat)) return 'You';
       const s = G.view.seats[seat];
       return (s && s.name) || 'Player';
     }
     if (seat === 0 && G.profile && G.profile.name) return G.profile.name;
     return NAMES[seat];
   }
-  function seatVerb(seat, base) { return seat === G.viewSeat ? base : base + (/(s|sh|ch|x)$/.test(base) ? 'es' : 's'); }
+  function seatVerb(seat, base) { return isMe(seat) ? base : base + (/(s|sh|ch|x)$/.test(base) ? 'es' : 's'); }
   // "You & Marcus" — the two players on a team, by name.
   function teamNames(team) {
-    return [team, team + 2].map((s) => (s === G.viewSeat ? 'You' : seatName(s))).join(' & ');
+    return [team, team + 2].map((s) => (isMe(s) ? 'You' : seatName(s))).join(' & ');
   }
 
   // ---- profile & avatars ----------------------------------------------------
@@ -291,8 +294,8 @@
       if (!el || !c) { resolve(); return; }
       const banner = $('table-banner');
       if (banner) banner.classList.remove('show'); // the kitty call has had its moment
-      const mine = seat === G.viewSeat;
-      const ours = seat % 2 === myTeam();
+      const mine = isMe(seat);
+      const ours = seat % 2 === myTeam() && !Online.watching;
       const dir = c.direction === 'uptown' ? 'Uptown' : 'Downtown';
       const red = c.trump === 'H' || c.trump === 'D';
       const glyph = c.type === 'notrump'
@@ -496,13 +499,13 @@
       spot.className = 'lb-spot at-' + slot(p.seat) + (p.seat === t.winner ? ' won' : '');
       spot.appendChild(cardEl(p.card, true));
       const nm = document.createElement('span'); nm.className = 'lb-name';
-      nm.textContent = p.seat === G.viewSeat ? 'You' : seatName(p.seat);
+      nm.textContent = isMe(p.seat) ? 'You' : seatName(p.seat);
       spot.appendChild(nm);
       box.appendChild(spot);
     }
     const lead = t.cards[0];
-    $('lastbook-note').textContent = `${lead.seat === G.viewSeat ? 'You' : seatName(lead.seat)} led · ` +
-      `${t.winner === G.viewSeat ? 'you' : seatName(t.winner)} took it with the ${E.cardLabel(t.cards.find((p) => p.seat === t.winner).card)}.`;
+    $('lastbook-note').textContent = `${isMe(lead.seat) ? 'You' : seatName(lead.seat)} led · ` +
+      `${isMe(t.winner) ? 'you' : seatName(t.winner)} took it with the ${E.cardLabel(t.cards.find((p) => p.seat === t.winner).card)}.`;
     $('modal-lastbook').classList.add('show');
   }
 
@@ -538,7 +541,7 @@
     b.textContent = text;
     host.appendChild(b);
     Sound.play('turn');
-    if (seat !== G.viewSeat) announce(`${seatName(seat)}: ${text}`);
+    if (!isMe(seat)) announce(`${seatName(seat)}: ${text}`);
     setTimeout(() => b.remove(), 2800);
   }
 
@@ -684,7 +687,7 @@
   async function kittyToSeat(seat) {
     const k = $('kitty');
     if (!k || k.classList.contains('gone')) return;
-    showBanner('Give me da kitty!', seat === G.viewSeat ? '' : '&mdash; ' + seatName(seat), 1700);
+    showBanner('Give me da kitty!', isMe(seat) ? '' : '&mdash; ' + seatName(seat), 1700);
     Sound.play('kitty');
     await wait(160);
     k.classList.add('taking', 'to-' + slot(seat));
@@ -710,11 +713,12 @@
       applyAvatar(plate.querySelector('.avatar'), avatarSpecFor(seat));
       const nameEl = plate.querySelector('.pname');
       const roleEl = plate.querySelector('.prole');
-      const mine = seat === G.viewSeat;
+      const mine = isMe(seat);
       const myName = mine ? ownName() : null;
       if (nameEl) nameEl.textContent = mine ? myName : seatName(seat);
       if (roleEl) {
         let role = mine ? (myName === 'You' ? 'add your name' : 'you')
+          : Online.watching ? ['south', 'west', 'north', 'east'][slot(seat)]
           : seat === (G.viewSeat + 2) % 4 ? 'your partner' : SLOT_ROLE[slot(seat)];
         if (G.mode === 'online' && G.view && G.view.seats) {
           const s = G.view.seats[seat];
@@ -723,7 +727,7 @@
         }
         roleEl.textContent = role;
       }
-      plate.classList.toggle('you', seat === G.viewSeat);
+      plate.classList.toggle('you', isMe(seat));
     }
     renderPlateBooks();
   }
@@ -805,7 +809,14 @@
   function renderHand() {
     const box = $('hand');
     box.innerHTML = '';
-    if (!G.hands || !G.hands[G.viewSeat] || Online.watching) return;
+    if (!G.hands || !G.hands[G.viewSeat]) return;
+    if (Online.watching) {
+      for (let i = 0; i < G.hands[G.viewSeat].length; i++) box.appendChild(cardEl(null, false));
+      box.classList.add('watching');
+      layoutHand();
+      return;
+    }
+    box.classList.remove('watching');
     const cards = E.sortHand(G.hands[G.viewSeat].filter((c) => !c.back), sortDirection(), G.contract);
     cards.forEach((card, i) => {
       const el = cardEl(card, true);
@@ -1334,19 +1345,19 @@
             G.kitty = ev.cards; renderKitty('sported');
             tableMsg(`${seatName(ev.seat)} sports the kitty.`);
             await wait(1800); tableMsg('');
-            showBanner('Give me da kitty!', ev.seat === G.viewSeat ? '' : '&mdash; ' + seatName(ev.seat), 1500);
+            showBanner('Give me da kitty!', isMe(ev.seat) ? '' : '&mdash; ' + seatName(ev.seat), 1500);
           } else {
             await kittyToSeat(ev.seat);
           }
           renderKitty('gone');
           break;
         case 'leadturn':
-          tableMsg(ev.seat === G.viewSeat ? 'You lead.' : seatName(ev.seat) + ' leads.');
+          tableMsg(isMe(ev.seat) ? 'You lead.' : seatName(ev.seat) + ' leads.');
           break;
         case 'play':
           G.memory.add(ev.card.id);
           addPlayedCard(ev.seat, ev.card);
-          if (ev.seat !== G.viewSeat) { G.hands[ev.seat] && G.hands[ev.seat].pop(); renderOppHands(); }
+          if (!isMe(ev.seat)) { G.hands[ev.seat] && G.hands[ev.seat].pop(); renderOppHands(); if (ev.seat === G.viewSeat) renderHand(); }
           else if (G.hands && G.hands[ev.seat]) {
             // Your card leaves your hand the moment it's on the felt.
             G.hands[ev.seat] = G.hands[ev.seat].filter((c) => c.id !== ev.card.id);
@@ -1365,7 +1376,7 @@
           await collectTrick(ev.winner);
           break;
         case 'discard':
-          if (ev.seat !== G.viewSeat) log(`${seatName(ev.seat)} takes the kitty and buries ${kittySize() === 4 ? 'four' : 'six'}.`);
+          if (!isMe(ev.seat)) log(`${seatName(ev.seat)} takes the kitty and buries ${kittySize() === 4 ? 'four' : 'six'}.`);
           break;
         case 'react':
           showReaction(ev.seat, ev.id);
@@ -1383,7 +1394,7 @@
           await wait(500);
           break;
         case 'timeout':
-          log(`${seatName(ev.seat)} ran out of time — the computer moved for ${ev.seat === G.viewSeat ? 'you' : 'them'}.`);
+          log(`${seatName(ev.seat)} ran out of time — the computer moved for ${isMe(ev.seat) ? 'you' : 'them'}.`);
           break;
         case 'sitIn':
           log(`<b>${ev.name}</b> sat down at the table.`, true);
@@ -1430,7 +1441,7 @@
       const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
       t.textContent = left + 's';
       t.classList.toggle('low', left <= 10);
-      if (left === 10 && view.turn === G.viewSeat) { Sound.play('turn'); announce('Ten seconds left.'); }
+      if (left === 10 && isMe(view.turn)) { Sound.play('turn'); announce('Ten seconds left.'); }
       if (left <= 0) { clearInterval(clockTimer); clockTimer = null; }
     };
     tick(); clockTimer = setInterval(tick, 1000);
@@ -1948,7 +1959,7 @@
 
   // Your own nameplate opens the profile editor.
   const ownPlate = $('plate-0');
-  ownPlate.addEventListener('click', () => { if (!$('splash').classList.contains('show')) openProfileEditor(); });
+  ownPlate.addEventListener('click', () => { if (!$('splash').classList.contains('show') && !Online.watching) openProfileEditor(); });
   ownPlate.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProfileEditor(); } });
   $('btn-settings-done').addEventListener('click', () => { formToSettings(); $('modal-settings').classList.remove('show'); });
 

@@ -1375,3 +1375,4 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
   .lobby-me .btn.small { padding: 6px 9px; font-size: 10px; white-space: nowrap; }
 }
 #modal-lobby .modal { max-width: 560px; }
+.hand.watching .card { cursor: default; animation: none; }
