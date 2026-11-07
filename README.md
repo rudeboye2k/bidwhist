@@ -34,6 +34,11 @@ online play is powered by a small Cloudflare Worker.
   (Table Rules → Help & readability) suggests bids, trump, what to bury and
   which card to play, with a reason. Coach uses the same brain as the
   computer players.
+- **The call is announced:** once the high bidder (person or computer) has
+  the kitty and names trump, the table shows who called it, the contract
+  ("Pearl calls it: 4 Downtown in Hearts") and what it takes to make or set
+  it — for about 2½ seconds before the first card (a tap skips it; your own
+  call gets a short confirmation).
 - **Talk at the table:** 💬 pops a quick call-out or emoji over your seat
   ("Run a Boston!", "Set 'em!", 😂 …); the bots talk a little trash too.
 - **Table record:** wins, Bostons, sets, best bidder and (online) best duo

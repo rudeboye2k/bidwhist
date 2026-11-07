@@ -233,6 +233,7 @@
       shuffle: () => { for (let i = 0; i < 10; i++) noise(0.05, 1800 + Math.random() * 1400, 1, 0.32, i * 0.055); },
       turn: () => tone(880, 0.12, 0.05),
       kitty: () => { tone(659.25, 0.18, 0.1); tone(987.77, 0.3, 0.1, 0.11); },
+      call: () => { tone(392, 0.22, 0.11, 0, 'triangle'); tone(523.25, 0.22, 0.11, 0.12, 'triangle'); tone(783.99, 0.45, 0.12, 0.24, 'triangle'); },
       made: () => { tone(523.25, 0.3, 0.1, 0, 'triangle'); tone(783.99, 0.4, 0.1, 0.1, 'triangle'); },
       chime: () => [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => tone(f, 0.6, 0.11, i * 0.1, 'triangle')),
       set: () => { tone(220, 0.35, 0.12, 0, 'triangle'); tone(164.8, 0.55, 0.12, 0.16, 'triangle'); },
@@ -279,6 +280,54 @@
     }
     document.body.appendChild(box);
     setTimeout(() => box.remove(), 4800);
+  }
+
+  // The trump call, announced across the table before the first card: who
+  // called it, the contract, and what it takes to make or set it. Stays up
+  // ~2.5s (a short confirmation when it's your own call); a tap skips it.
+  function announceContract(seat, c) {
+    return new Promise((resolve) => {
+      const el = $('trump-call');
+      if (!el || !c) { resolve(); return; }
+      const banner = $('table-banner');
+      if (banner) banner.classList.remove('show'); // the kitty call has had its moment
+      const mine = seat === G.viewSeat;
+      const ours = seat % 2 === myTeam();
+      const dir = c.direction === 'uptown' ? 'Uptown' : 'Downtown';
+      const red = c.trump === 'H' || c.trump === 'D';
+      const glyph = c.type === 'notrump'
+        ? '<span class="tc-glyph nt">NT</span>'
+        : `<span class="tc-glyph ${red ? 'red' : 'blk'} suit-${c.trump}">${E.SUIT_GLYPHS[c.trump]}</span>`;
+      const contract = c.type === 'notrump'
+        ? `${c.amount} No-Trump, ${dir}`
+        : `${c.amount} ${dir} in <span class="tc-suit ${red ? 'red' : 'blk'} suit-${c.trump}">${E.SUIT_NAMES[c.trump]}</span>`;
+      const need = 6 + c.amount, set = 8 - c.amount;
+      const who = mine ? 'You call it' : `${seatName(seat)} calls it`;
+      const sub = ours
+        ? `Your team needs <b>${need}</b> books · they set you with <b>${set}</b>`
+        : `${seatName(seat)}&rsquo;s team needs <b>${need}</b> books · set them with <b>${set}</b>`;
+      el.innerHTML = `${glyph}<span class="tc-text"><span class="tc-who">${who}</span>` +
+        `<span class="tc-contract">${contract}</span><span class="tc-sub">${sub}</span>` +
+        `<span class="tc-how">${c.direction === 'uptown' ? 'High cards win' : 'Low cards win — ace still tops'}${c.type === 'notrump' ? ' · no trump suit' : ''}</span></span>`;
+      el.classList.remove('show', 'quick'); void el.offsetWidth;
+      el.classList.add('show');
+      if (mine) el.classList.add('quick');
+      replay($('trump-badge'), 'pulse');
+      Sound.play('call');
+      announce(`${mine ? 'You call' : seatName(seat) + ' calls'} ${E.describeContract(c)}. ` +
+        `${ours ? 'Your' : 'Their'} team needs ${need} books.`);
+      let done = false;
+      const table = $('table');
+      const finish = () => {
+        if (done) return;
+        done = true;
+        el.classList.remove('show', 'quick');
+        table.removeEventListener('pointerdown', finish);
+        setTimeout(resolve, 180); // let it fade before the first card
+      };
+      table.addEventListener('pointerdown', finish);
+      setTimeout(finish, mine ? 1300 : 2500);
+    });
   }
 
   // Re-trigger a CSS entrance animation (stamps slamming down, shakes).
@@ -1263,6 +1312,7 @@
           await wait(PACE.bid);
           break;
         case 'auction':
+          tableMsg('');
           log(`<b>${seatName(ev.highSeat)}</b> won the auction at <b>${E.describeBid(ev.bid)}</b>.`, true);
           break;
         case 'throwin':
@@ -1275,6 +1325,8 @@
           log(`<b>${seatName(ev.seat)}</b> ${c.type === 'notrump'
             ? seatVerb(ev.seat, 'call') + ' No-Trump, running ' + (c.direction === 'uptown' ? 'uptown' : 'downtown')
             : seatVerb(ev.seat, 'name') + ' <b>' + E.SUIT_NAMES[c.trump] + '</b> trump, ' + c.type}.`, true);
+          // Nobody plays until the call has been announced to the table.
+          await announceContract(ev.seat, c);
           break;
         }
         case 'kitty':

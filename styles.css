@@ -1304,3 +1304,60 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
   .chipbtn small { display: none; }
 }
 .bid-col.bid-go { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+
+/* ---------- the trump call, announced before the first card ---------- */
+.trump-call {
+  position: absolute; left: 50%; top: 44%; z-index: 16; pointer-events: none;
+  display: flex; align-items: center; gap: 16px; width: max-content; max-width: min(92%, 520px);
+  padding: 16px 24px 16px 16px; border-radius: 20px;
+  background: linear-gradient(180deg, rgba(42, 21, 17, .96), rgba(24, 12, 10, .96));
+  border: 2px solid var(--gold); box-shadow: 0 18px 50px rgba(0, 0, 0, .7), 0 0 0 6px rgba(212, 169, 78, .12);
+  transform: translate(-50%, -50%) scale(.6); opacity: 0; visibility: hidden;
+  transition: opacity .18s ease, transform .18s ease, visibility 0s .18s;
+}
+.trump-call.show {
+  pointer-events: auto; cursor: pointer; visibility: visible; opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  transition: opacity .25s ease, transform .4s cubic-bezier(.2, 1.4, .4, 1), visibility 0s;
+}
+.tc-glyph {
+  flex-shrink: 0; width: 64px; height: 86px; border-radius: 10px; display: grid; place-items: center;
+  background: linear-gradient(160deg, #fbf6e8, var(--cream) 60%, #eadfc4); border: 1px solid #b9ad8d;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .5);
+  font-family: var(--font-display); font-size: 46px; line-height: 1; color: var(--ink);
+}
+.tc-glyph.red { color: var(--red); }
+.tc-glyph.nt { font-size: 22px; font-weight: 800; color: var(--burgundy); }
+.tc-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; text-align: left; }
+.tc-who { font-size: 11px; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; color: var(--gold); }
+.tc-contract { font-family: var(--font-display); font-weight: 800; font-size: 28px; line-height: 1.1; color: var(--cream); }
+.tc-suit.red { color: #ef7a68; }
+.tc-suit.blk { color: var(--gold-bright); }
+.tc-sub { font-size: 13px; color: var(--cream-dim); }
+.tc-sub b { color: var(--gold-bright); }
+.tc-how { font-family: var(--font-display); font-style: italic; font-size: 13px; color: var(--gold-bright); }
+:root[data-deck="four"] .tc-glyph.suit-D, :root[data-deck="four"] .tc-suit.suit-D { color: #4f86e8; }
+:root[data-deck="four"] .tc-glyph.suit-C, :root[data-deck="four"] .tc-suit.suit-C { color: #3fae66; }
+.trump-badge.pulse { animation: badgePulse 1.4s ease 2; }
+@keyframes badgePulse {
+  0%, 100% { box-shadow: 0 4px 12px rgba(0, 0, 0, .45); }
+  50% { box-shadow: 0 0 0 4px rgba(240, 205, 120, .55), 0 0 22px rgba(240, 205, 120, .6); }
+}
+@media (max-width: 600px) {
+  .trump-call { top: 47%; gap: 11px; padding: 12px 14px 12px 11px; border-radius: 16px; max-width: 94%; }
+  .tc-glyph { width: 46px; height: 62px; font-size: 32px; border-radius: 8px; }
+  .tc-glyph.nt { font-size: 16px; }
+  .tc-contract { font-size: 20px; }
+  .tc-sub, .tc-how { font-size: 11.5px; }
+  .tc-who { font-size: 9.5px; letter-spacing: .18em; }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .trump-call { top: 46%; padding: 9px 14px 9px 9px; gap: 10px; }
+  .tc-glyph { width: 38px; height: 52px; font-size: 26px; }
+  .tc-contract { font-size: 18px; }
+  .tc-how { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trump-call, .trump-call.show { transition: none; }
+  .trump-badge.pulse { animation: none; }
+}
