@@ -598,7 +598,7 @@
     say(token, text) {
       const seat = this.seatOf(token);
       if (seat === null) return { error: 'not-seated' };
-      const clean = typeof text === 'string' ? stripMarkup(text).slice(0, 60).trim() : '';
+      const clean = typeof text === 'string' ? E.filterChat(stripMarkup(text).slice(0, 60).trim()) : '';
       if (!clean) return { error: 'empty-message' };
       const now = this.now();
       if (now - (this.reactAt[seat] || 0) < 1200) return { error: 'slow-down' };

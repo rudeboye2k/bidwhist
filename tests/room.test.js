@@ -443,5 +443,20 @@ check('rooms have distinct codes', r1.code !== r2.code);
   check('watchers can\'t type at the table', r.say('nobody', 'hi').error === 'not-seated');
 }
 
+// ---- chat word filter ----
+{
+  const E = require('../js/engine.js');
+  const f = E.filterChat;
+  check('profanity is masked', f('what the fuck') === 'what the f***');
+  check('dodges are caught (sh1t, $hit, fuuuck, b!tch)', !/sh1t|\$hit|fuuu|b!tch/i.test(f('sh1t $hit fuuuck b!tch')));
+  check('slurs are masked', !/nigg|fagg|kike/i.test(f('nigga faggot kike')));
+  check('innocent words untouched', f('classic assassin cocktail spicy Dickens shoe Mississippi') === 'classic assassin cocktail spicy Dickens shoe Mississippi');
+  check('table talk stays intact', f("Set 'em! Run a Boston, partner") === "Set 'em! Run a Boston, partner");
+  let now = 9000000;
+  const r = new Room('FILT', {}, { now: () => now });
+  const a = r.join('Ann');
+  check('the server filters typed messages', r.say(a.token, 'deal the damn cards').events[0].text === 'deal the d*** cards');
+}
+
 if (failures) { console.error('\n' + failures + ' failure(s)'); process.exit(1); }
 console.log('\nAll room-core tests passed.');

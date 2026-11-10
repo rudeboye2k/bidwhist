@@ -41,7 +41,8 @@ online play is powered by a small Cloudflare Worker.
   call gets a short confirmation).
 - **Talk at the table:** 💬 pops a quick call-out or emoji over your seat
   ("Run a Boston!", "Set 'em!", 😂 …) — or type your own (one line, up to 60
-  characters, plain text). Messages show over your seat and in Table Talk;
+  characters, plain text; profanity and slurs are masked, e.g. "f***", with
+  common dodges like sh1t or fuuuck caught). Messages show over your seat and in Table Talk;
   the bots talk a little trash too.
 - **Table record:** wins, Bostons, sets, best bidder and (online) best duo
   across games at the table, on the game-over screen; solo also keeps an

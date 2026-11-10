@@ -43,6 +43,31 @@
     'Nice book!', 'Too slow!', 'Uh-oh…', '😂', '🔥', '😤', '👏', '🙌', '😱',
   ];
 
+  // ---- chat word filter ---------------------------------------------------
+  // Typed table talk is masked ("f***") for profanity and slurs. Words are
+  // checked after undoing common dodges (sh1t, $hit, fuuuck). Roots in ROOTS
+  // are caught anywhere in a word; WORDS only as a whole word, so innocent
+  // words stay intact (class, assassin, cocktail, spicy, Dickens, shoe).
+  const ROOTS = ['fuck', 'fuk', 'fck', 'shit', 'cunt', 'nigg', 'niga', 'bitch', 'biatch', 'whore', 'slut', 'fagg',
+    'faggot', 'retard', 'motherf', 'pussy', 'bastard', 'asshole', 'dickhead', 'jackass', 'twat', 'wank', 'kike',
+    'wetback', 'tranny', 'piss', 'bullshit', 'dumbass', 'jackoff', 'jerkoff', 'cocksuck'];
+  const WORDS = ['ass', 'asses', 'dick', 'dicks', 'cock', 'cocks', 'spic', 'spics', 'coon', 'coons', 'dyke', 'dykes',
+    'chink', 'chinks', 'hoe', 'hoes', 'tit', 'tits', 'fag', 'fags', 'nig', 'damn', 'goddamn', 'crap', 'arse', 'skank'];
+  const LEET = { 0: 'o', 1: 'i', 3: 'e', 4: 'a', 5: 's', 7: 't', 8: 'b', '@': 'a', $: 's', '!': 'i', '+': 't' };
+  function badWord(token) {
+    const norm = token.toLowerCase().replace(/[013457 8@$!+]/g, (c) => LEET[c] || c).replace(/[^a-z]/g, '');
+    if (!norm) return false;
+    const squeezed = norm.replace(/(.)\1+/g, '$1'); // fuuuck → fuck
+    for (const w of [norm, squeezed]) {
+      if (WORDS.includes(w)) return true;
+      if (ROOTS.some((r) => w.includes(r))) return true;
+    }
+    return false;
+  }
+  function filterChat(text) {
+    return String(text).replace(/[\p{L}\p{N}@$!+*]+/gu, (tok) => (badWord(tok) ? tok[0] + '*'.repeat(Math.max(2, tok.length - 1)) : tok));
+  }
+
   // Accept only known rule values (rules travel over the wire from the host).
   function cleanRules(r) {
     const d = DEFAULT_RULES, o = {};
@@ -262,7 +287,7 @@
   }
 
   return {
-    SUITS, SUIT_NAMES, SUIT_GLYPHS, DEFAULT_RULES, REACTIONS, cleanRules,
+    SUITS, SUIT_NAMES, SUIT_GLYPHS, DEFAULT_RULES, REACTIONS, cleanRules, filterChat,
     newDeck, shuffle, deal,
     bidKind, bidValue, isLegalBid, describeBid, describeContract, booksToSet,
     effectiveSuit, rankPower, cardPower, trickLedSuit, legalPlays, allowedPlays, isRenege, trickWinner,
