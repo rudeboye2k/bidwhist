@@ -33,7 +33,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Libre+Franklin:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=17">
+<link rel="stylesheet" href="styles.css?v=19">
 <script>try{var L=localStorage,d=document.documentElement,f=L.getItem('bidwhist.felt');if(f)d.setAttribute('data-felt',f);if(L.getItem('bidwhist.bigCards')==='on')d.setAttribute('data-cards','big');if(L.getItem('bidwhist.fourColor')==='on')d.setAttribute('data-deck','four')}catch(e){}</script>
 </head>
 <body>
@@ -153,6 +153,7 @@
       <div class="splash-actions">
         <button class="btn primary big" id="btn-deal-in" type="button">Play the Computer</button>
         <button class="btn ghost big" id="btn-play-online" type="button">Play Online</button>
+        <button class="btn ghost big learn" id="btn-learn" type="button">🎓 Learn to Play</button>
       </div>
       <button class="splash-profile" id="splash-profile" type="button">
         <span class="avatar" id="splash-avatar"></span>
@@ -345,7 +346,10 @@
           by winning <b>8 &minus; bid</b> books: four books stops a 4-bid, three stops a 5. Taking
           all 13 is a <b>Boston</b>. First team to the target wins; fall to minus-target and you lose.</p>
       </div>
-      <button class="btn primary" id="btn-howto-done" type="button">Back to the Table</button>
+      <div class="modal-actions howto-actions">
+        <button class="btn primary" id="btn-howto-learn" type="button">Play a Guided Hand</button>
+        <button class="btn ghost" id="btn-howto-done" type="button">Back to the Table</button>
+      </div>
     </div>
   </div>
 
@@ -356,6 +360,19 @@
       <div class="lastbook" id="lastbook"></div>
       <p class="online-sub" id="lastbook-note"></p>
       <button class="btn primary" id="btn-lastbook-done" type="button">Back to the Table</button>
+    </div>
+  </div>
+
+  <!-- Learn to Play: a lesson card that walks you through a real hand -->
+  <div class="overlay lesson-overlay" id="modal-lesson" role="dialog" aria-modal="true" aria-labelledby="lesson-title">
+    <div class="modal lesson-card">
+      <div class="lesson-head">
+        <span class="lesson-kicker" id="lesson-kicker">Lesson</span>
+        <button class="lesson-exit" id="btn-lesson-exit" type="button">Exit lesson</button>
+      </div>
+      <h2 class="modal-title" id="lesson-title"></h2>
+      <div class="lesson-body" id="lesson-body"></div>
+      <div class="modal-actions lesson-actions" id="lesson-actions"></div>
     </div>
   </div>
 
@@ -375,17 +392,17 @@
   </div>
 </div>
 
-<script src="js/engine.js?v=17"></script>
-<script src="js/ai.js?v=17"></script>
+<script src="js/engine.js?v=19"></script>
+<script src="js/ai.js?v=19"></script>
 <script>
   // The site and the game server are one Cloudflare Worker, so the server is
   // simply this page's own address — nothing to configure. Only if you host the
   // page somewhere else (e.g. GitHub Pages) would you point it at the Worker:
   // window.BIDWHIST_SERVER = "https://bidwhist.<your-subdomain>.workers.dev";
 </script>
-<script src="js/room-core.js?v=17"></script>
-<script src="js/qrcode.js?v=17"></script>
-<script src="js/net.js?v=17"></script>
-<script src="js/app.js?v=17"></script>
+<script src="js/room-core.js?v=19"></script>
+<script src="js/qrcode.js?v=19"></script>
+<script src="js/net.js?v=19"></script>
+<script src="js/app.js?v=19"></script>
 </body>
 </html>

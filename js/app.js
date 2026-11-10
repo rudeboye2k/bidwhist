@@ -568,7 +568,10 @@
 
   // ---- coach --------------------------------------------------------------------
   // The same brain the computer players use, offered as a suggestion.
-  function coachOn() { try { return localStorage.getItem('bidwhist.coach') === 'on'; } catch (_) { return false; } }
+  function coachOn() {
+    if (T.on) return false;
+    try { return localStorage.getItem('bidwhist.coach') === 'on'; } catch (_) { return false; }
+  }
   function myHand() { return (G.hands && G.hands[G.viewSeat] || []).filter((c) => !c.back); }
   function liveTrickFromView(view) {
     return (view && view.trick ? view.trick : []).map((p) => ({ player: p.seat, card: p.card }));
@@ -604,6 +607,12 @@
       else if (wins) why = 'this takes the book as cheaply as possible';
       else if (led && E.effectiveSuit(card, c) !== led) why = "you're out of the suit — throw off your weakest card";
       else why = "can't win this one — throw low";
+      // Only one card of the led suit? Then that's the whole reason.
+      const follow = hand.filter((x) => E.effectiveSuit(x, c) === led);
+      if (led && follow.length === 1 && follow[0].id === card.id && !wins && !partnerHas) {
+        const one = led === c.trump ? 'trump' : E.SUIT_NAMES[led].toLowerCase().replace(/s$/, '');
+        why = `it's your only ${one}, so it has to go`;
+      }
     }
     return { card, why };
   }
@@ -976,7 +985,11 @@
     goCol.appendChild(bidBtn); goCol.appendChild(ntBtn); goCol.appendChild(passBtn);
     bar.appendChild(goCol);
 
-    const legal = (a, t) => E.isLegalBid({ amount: a, type: t }, G.high, G.rules);
+    const legal0 = (a, t) => E.isLegalBid({ amount: a, type: t }, G.high, G.rules);
+    // In a lesson only the bid being taught can be made.
+    const lock = T.on && T.bid;
+    const legal = (a, t) => legal0(a, t) && (!lock || (a === lock.amount && t === lock.type));
+    if (lock) { sel.amount = lock.amount; passBtn.disabled = true; }
 
     function refresh() {
       // default to the cheapest legal call
@@ -1033,6 +1046,7 @@
       b.innerHTML = `${E.SUIT_GLYPHS[s]} <small>${E.SUIT_NAMES[s]} (${count})</small>`;
       b.title = E.SUIT_NAMES[s];
       b.addEventListener('click', () => { sel.trump = s; refresh(); });
+      if (T.on && T.decl && T.decl.trump !== s) b.disabled = true;
       suitBtns[s] = b; suitRow.appendChild(b);
     }
     const dirRow = document.createElement('div'); dirRow.className = 'bid-group';
@@ -1041,6 +1055,7 @@
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'chipbtn wide'; b.innerHTML = label;
       b.addEventListener('click', () => { sel.direction = d; refresh(); });
+      if (T.on && T.decl && T.decl.direction !== d) b.disabled = true;
       dirBtns[d] = b; dirRow.appendChild(b);
     }
     const go = document.createElement('button');
@@ -1078,6 +1093,7 @@
     bar.innerHTML = '<div class="action-hint" id="discard-hint"></div>';
     const auto = document.createElement('button');
     auto.type = 'button'; auto.className = 'btn ghost'; auto.textContent = 'Auto-pick';
+    if (T.on) auto.hidden = true;
     auto.addEventListener('click', () => {
       G.discardPicks = new Set(AI.chooseDiscards(G.hands[G.viewSeat], G.contract).map((c) => c.id));
       renderHand(); updateDiscardBar();
@@ -1109,6 +1125,7 @@
       const chosen = card;
       if (G.resolve) G.resolve(chosen);
     } else if (G.awaiting === 'discard') {
+      if (T.on && G.coachIds && !G.coachIds.has(card.id)) return; // lesson: bury the outlined cards
       if (G.discardPicks.has(card.id)) G.discardPicks.delete(card.id);
       else if (G.discardPicks.size < kittySize()) G.discardPicks.add(card.id);
       renderHand(); updateDiscardBar();
@@ -1125,14 +1142,282 @@
     conn: null, queue: [], draining: false, started: false, local: false, watching: false,
   };
 
+  // ---- Learn to Play: a guided hand ------------------------------------------
+  // A real hand on a fixed deal (found by search so it shows everything worth
+  // teaching: you outbid a 3 with a 4, name Spades Uptown, bury, follow suit,
+  // trump, see a joker and your partner win books — and make it). A lesson
+  // card explains each moment; on your turn only the move being taught is
+  // allowed, with the reason. Everything is computed by the same coach the
+  // Coach option uses, so the lesson always matches the cards on the table.
+  const TUTORIAL_SEED = 1789;
+  const T = { on: false, seen: {}, auto: false, bid: null, decl: null, play: null, wonBid: false, books: 0 };
+
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // Show a lesson card; resolves with the chosen button's value.
+  let lessonDone = null;
+  function lesson(kicker, title, html, buttons) {
+    return new Promise((resolve) => {
+      if (!T.on) { resolve('skip'); return; }
+      const plain = (t) => String(t).replace(/&rsquo;/g, '’');
+      $('lesson-kicker').textContent = plain(kicker);
+      $('lesson-title').textContent = plain(title);
+      $('lesson-body').innerHTML = html;
+      const box = $('lesson-actions');
+      box.innerHTML = '';
+      for (const b of buttons || [{ label: 'Next', value: 'next', primary: true }]) {
+        const el = document.createElement('button');
+        el.type = 'button'; el.className = 'btn ' + (b.primary ? 'primary' : 'ghost');
+        el.textContent = String(b.label).replace(/&rsquo;/g, '’');
+        el.addEventListener('click', () => { $('modal-lesson').classList.remove('show'); lessonDone = null; resolve(b.value); });
+        box.appendChild(el);
+      }
+      lessonDone = resolve;
+      $('modal-lesson').classList.add('show');
+      // Phones: bring the table back into view behind the lesson.
+      if (window.innerWidth <= 760) { try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (_) { window.scrollTo(0, 0); } }
+      setTimeout(() => { const f = box.querySelector('.btn.primary') || box.querySelector('.btn'); if (f) f.focus(); }, 60);
+    });
+  }
+  function exitTutorial() {
+    T.on = false; T.auto = false;
+    $('modal-lesson').classList.remove('show');
+    if (lessonDone) { const r = lessonDone; lessonDone = null; r('exit'); }
+    log('Lesson over — the hand is yours to finish. Good luck!', true);
+    if (G.view) setupTurn(G.view);
+  }
+
+  async function startTutorial() {
+    Object.assign(T, { on: true, seen: {}, auto: false, bid: null, decl: null, play: null, wonBid: false, books: 0 });
+    for (const id of ['splash', 'modal-howto', 'modal-summary', 'modal-gameover']) $(id).classList.remove('show');
+    const a = await lesson('Learn to Play · 1 of 3', 'Welcome to the table',
+      '<p>Bid Whist is played by <b>four people in two teams</b>. Your <b>partner</b> sits across from you — that&rsquo;s Marcus. ' +
+      'The players on your left and right (Pearl and Deacon) are the other team.</p><p>You and your partner win or lose <i>together</i>.</p>');
+    if (a === 'exit') return;
+    const b = await lesson('Learn to Play · 2 of 3', 'How you win',
+      '<p>Each hand is played as <b>12 rounds called books</b>: everyone plays one card, and the best card takes the book.</p>' +
+      '<p>Before playing, there&rsquo;s an <b>auction</b>. The team that bids highest has to take that many books; the other team tries to stop them.</p>' +
+      '<p>Make your bid and you score points. Get stopped (<b>set</b>) and you lose points. <b>First team to 7 wins.</b></p>');
+    if (b === 'exit') return;
+    const c = await lesson('Learn to Play · 3 of 3', 'How this lesson works',
+      '<p>We&rsquo;ll play one real hand together. I&rsquo;ll explain each step as it happens.</p>' +
+      '<p>When it&rsquo;s your turn, <b>only the right move is lit up</b> — tap it and I&rsquo;ll tell you why it&rsquo;s right. You can leave any time with <i>Exit lesson</i>.</p>',
+      [{ label: 'Deal the cards', value: 'go', primary: true }]);
+    if (c === 'exit') return;
+    startSolo({ seed: TUTORIAL_SEED, rules: E.cleanRules(E.DEFAULT_RULES), tutorial: true });
+  }
+
+  const suitWord = (s) => `${E.SUIT_GLYPHS[s]} ${E.SUIT_NAMES[s]}`;
+  function handFacts(hand) {
+    const by = { S: [], H: [], D: [], C: [] };
+    let jokers = 0, aces = 0;
+    for (const c of hand) { if (c.joker) jokers++; else { by[c.suit].push(c); if (c.rank === 14) aces++; } }
+    const longest = E.SUITS.slice().sort((a, b) => by[b].length - by[a].length)[0];
+    return { by, jokers, aces, longest, n: by[longest].length };
+  }
+
+  async function tutorialDeal() {
+    if (T.seen.deal) return;
+    T.seen.deal = true;
+    const v = G.view;
+    if (v && v.you) {
+      G.hands = G.hands || [[], [], [], []]; G.hands[G.viewSeat] = v.you.hand;
+      G.kitty = new Array(v.kittySize || 6).fill(null);
+      renderPlates(); renderKitty('back'); renderHand();
+    }
+    await wait(700);
+    const f = handFacts(v && v.you ? v.you.hand : []);
+    await lesson('The deal', 'Your 12 cards',
+      `<p>The deck has 54 cards — a regular deck <b>plus two jokers</b>. Everyone gets <b>12</b>, and the last <b>6</b> go face-down in the middle: that&rsquo;s the <b>kitty</b> 🐱. The kitty goes to whoever wins the auction.</p>` +
+      `<p>Your cards are along the bottom, sorted by suit. Look at what you&rsquo;re holding: ` +
+      `${f.jokers ? `<b>${f.jokers === 2 ? 'both jokers' : 'a joker'}</b> (the strongest cards in the game), ` : ''}` +
+      `<b>${f.n} ${E.SUIT_NAMES[f.longest]}</b>${f.aces ? ` and <b>${f.aces} ace${f.aces > 1 ? 's' : ''}</b>` : ''}. That&rsquo;s a good-looking hand.</p>`);
+  }
+
+  // Before your move: what's the lesson for this decision?
+  function tutorialLock(view) {
+    T.play = null;
+    const hand = myHand();
+    if (view.need === 'bid') {
+      let bid = AI.chooseBid(hand, G.high, G.rules, !!(view.you && view.you.mustBid), () => 0.5, null, G.viewSeat).bid;
+      if (bid.pass || !E.isLegalBid(bid, G.high, G.rules)) {
+        bid = null;
+        for (let a = G.rules.minBid; a <= 7 && !bid; a++) if (E.isLegalBid({ amount: a, type: 'suit' }, G.high, G.rules)) bid = { amount: a, type: 'suit' };
+      }
+      T.bid = bid;
+    } else if (view.need === 'declare-suit') {
+      T.decl = AI.chooseDeclare(hand, 'suit');
+    } else if (view.need === 'declare-dir') {
+      T.decl = AI.chooseDeclare(hand, 'notrump');
+    } else if (view.need === 'discard') {
+      G.coachIds = new Set(AI.chooseDiscards(hand, G.contract).map((c) => c.id));
+    } else if (view.need === 'play') {
+      T.play = coachPlay(view);
+    }
+  }
+  // The one-line instruction in the action bar, plus auto-play if chosen.
+  function tutorialTip(view) {
+    const line = (html) => { const d = document.createElement('div'); d.className = 'lesson-tip'; d.innerHTML = html; $('action-bar').insertBefore(d, $('action-bar').firstChild); };
+    let act = null;
+    if (view.need === 'bid' && T.bid) {
+      line(`👉 Tap <b>${T.bid.amount}</b>, then <b>Bid ${T.bid.amount}</b>.`);
+      act = () => G.resolve && G.resolve(T.bid);
+    } else if (view.need === 'declare-suit' && T.decl) {
+      line(`👉 Tap <b>${suitWord(T.decl.trump)}</b>, then <b>${T.decl.direction === 'uptown' ? 'Uptown' : 'Downtown'}</b>, then the gold button.`);
+      act = () => G.resolve && G.resolve(T.decl);
+    } else if (view.need === 'declare-dir' && T.decl) {
+      line(`👉 Tap <b>${T.decl.direction === 'uptown' ? 'Uptown' : 'Downtown'}</b>.`);
+      act = () => G.resolve && G.resolve(T.decl.direction);
+    } else if (view.need === 'discard') {
+      line('👉 Tap the <b>six outlined cards</b>, then <b>Bury Six</b>.');
+      act = () => { G.discardPicks = new Set(G.coachIds); renderHand(); updateDiscardBar(); G.resolve && G.resolve(null); };
+    } else if (view.need === 'play' && T.play) {
+      line(`👉 Play the <b>${E.cardLabel(T.play.card)}</b> — ${T.play.why}.`);
+      act = () => G.resolve && G.resolve(T.play.card);
+    }
+    if (T.auto && act) setTimeout(act, 650);
+  }
+
+  // Lessons that appear once your turn is on screen (skipped in auto mode).
+  async function tutorialTurn(view) {
+    if (!T.on || T.auto) return;
+    const mine = view.you && view.turn === view.you.seat && view.need;
+    if (!mine) return;
+    if (view.need === 'bid' && !T.seen.bid) {
+      T.seen.bid = true;
+      const said = [1, 2, 3].map((k) => (G.viewSeat + k) % 4).filter((s) => G.bids[s])
+        .map((s) => `${seatName(s)} ${G.bids[s].pass ? 'passed' : 'bid <b>' + E.describeBid(G.bids[s]) + '</b>'}`);
+      const f = handFacts(myHand());
+      await lesson('The auction', 'Your bid',
+        `<p>Everyone gets <b>one bid</b>, starting left of the dealer. A bid is a number from <b>3 to 7</b>: the books <i>over six</i> your team promises to take. ` +
+        `Bid <b>4</b> means <b>10</b> of the 13 books (the kitty counts as one). You can also add <b>No-Trump</b>, but let&rsquo;s keep it simple.</p>` +
+        (said.length ? `<p>So far: ${said.join(', ')}.</p>` : '') +
+        (G.high && G.highSeat === (G.viewSeat + 2) % 4
+          ? `<p>Yes — that 3 is your own partner&rsquo;s bid. You&rsquo;re allowed to outbid your partner, and you should when your hand is the stronger one: then <i>you</i> get the kitty and name trump.</p>` : '') +
+        `<p>A four beats a three. With ${f.jokers ? 'a joker, ' : ''}${f.n} ${E.SUIT_NAMES[f.longest]}${f.aces ? ` and ${f.aces} ace${f.aces > 1 ? 's' : ''}` : ''}, you can take plenty of books — so <b>bid ${T.bid ? T.bid.amount : 4}</b> and win the kitty.</p>`,
+        [{ label: 'Got it', value: 'ok', primary: true }]);
+    } else if ((view.need === 'declare-suit' || view.need === 'declare-dir') && !T.seen.decl) {
+      T.seen.decl = true;
+      const d = T.decl || {};
+      const n = myHand().filter((c) => c.suit === d.trump || c.joker).length;
+      await lesson('Naming trump', d.trump ? `Pick ${E.SUIT_NAMES[d.trump]} — and Uptown` : 'Pick a direction',
+        `<p><b>Trump</b> is the boss suit: any trump card beats every card of the other suits. Since you won the bid, <i>you</i> choose it — after seeing the kitty.</p>` +
+        `<p>You also pick the <b>direction</b>: <b>Uptown</b> means high cards win (A, K, Q…), <b>Downtown</b> means low cards win (A, 2, 3…).</p>` +
+        (d.trump ? `<p>With the kitty you hold <b>${n} trumps</b> if you call ${E.SUIT_NAMES[d.trump]} (the jokers are trumps too), and they&rsquo;re high cards — so call <b>${suitWord(d.trump)}, ${d.direction === 'uptown' ? 'Uptown' : 'Downtown'}</b>.</p>` : ''),
+        [{ label: 'Got it', value: 'ok', primary: true }]);
+    } else if (view.need === 'discard' && !T.seen.discard) {
+      T.seen.discard = true;
+      await lesson('The kitty', 'Bury six cards',
+        `<p>You&rsquo;re holding 18 cards but you&rsquo;ll only play 12, so you put <b>six face-down</b>. They count as your team&rsquo;s <b>first book</b> — you&rsquo;re already one up!</p>` +
+        `<p>Bury cards that won&rsquo;t win anything: low cards in your short suits. Keep your trumps and your aces. I&rsquo;ve outlined the six to bury.</p>`,
+        [{ label: 'Got it', value: 'ok', primary: true }]);
+    } else if (view.need === 'play' && T.play) {
+      const trick = liveTrickFromView(view), c = G.contract, card = T.play.card;
+      const led = trick.length ? E.trickLedSuit(trick, c) : null;
+      const trumpCard = c.type !== 'notrump' && (card.joker || card.suit === c.trump);
+      if (!trick.length && !T.seen.lead) {
+        T.seen.lead = true;
+        await lesson('The play', 'You lead the first book',
+          `<p>The bidder leads first. Whatever suit is <b>led</b>, everyone must <b>follow suit</b> if they can. The highest card of the led suit wins the book — <i>unless</i> someone plays a trump.</p>` +
+          `<p>${trumpCard ? `Leading trump pulls the other team&rsquo;s trumps out early, so they can&rsquo;t use them to steal your books. ` : ''}Lead the <b>${E.cardLabel(card)}</b>: ${T.play.why}.</p>`,
+          [{ label: 'Got it', value: 'ok', primary: true }]);
+      } else if (led && E.effectiveSuit(card, c) === led && !T.seen.follow && myHand().some((x) => E.effectiveSuit(x, c) !== led)) {
+        T.seen.follow = true;
+        await lesson('The play', 'Follow suit',
+          `<p>${led === c.trump ? 'Trump' : E.SUIT_NAMES[led]} was led and you have ${myHand().filter((x) => E.effectiveSuit(x, c) === led).length === 1 ? 'one, so you <b>must</b> play it' : 'some, so you <b>must</b> play one'} — that&rsquo;s why your other cards are dimmed.</p>` +
+          `<p>Play the <b>${E.cardLabel(card)}</b>: ${T.play.why}.</p>`, [{ label: 'Got it', value: 'ok', primary: true }]);
+      } else if (led && trumpCard && led !== c.trump && !T.seen.trump) {
+        T.seen.trump = true;
+        await lesson('The play', 'Out of the suit? Trump it!',
+          `<p>You don&rsquo;t have any ${E.SUIT_NAMES[led]}, so you&rsquo;re free to play anything — and a <b>trump</b> beats every ${E.SUIT_NAMES[led]} on the table.</p>` +
+          `<p>Play the <b>${E.cardLabel(card)}</b> and take the book.</p>`, [{ label: 'Got it', value: 'ok', primary: true }]);
+      } else if (/partner has it/.test(T.play.why) && !T.seen.partner) {
+        T.seen.partner = true;
+        await lesson('The play', 'Let your partner have it',
+          `<p>Your partner&rsquo;s card is already winning this book, and books count for the whole team. No need to spend a good card — <b>throw your cheapest one</b>.</p>`,
+          [{ label: 'Got it', value: 'ok', primary: true }]);
+      }
+    }
+  }
+
+  async function tutorialKitty() {
+    await lesson('The auction', 'You won it — give me da kitty!',
+      `<p>Highest bid takes the kitty. Those six cards are going into your hand now, so you&rsquo;ll have <b>18</b> to choose from.</p>` +
+      `<p>That&rsquo;s the prize for winning the bid: you see the extra cards <i>before</i> you decide what trump is.</p>`);
+  }
+  async function tutorialCalled(c) {
+    if (T.seen.called) return;
+    T.seen.called = true;
+    const need = 6 + c.amount, set = 8 - c.amount;
+    await lesson('The call', 'Everyone knows the deal now',
+      `<p>Trump is <b>${c.type === 'notrump' ? 'none (No-Trump)' : suitWord(c.trump)}</b>, running <b>${c.direction === 'uptown' ? 'Uptown' : 'Downtown'}</b>. You&rsquo;ll see it in the corner of the table the whole hand.</p>` +
+      `<p>Your team needs <b>${need} books</b>. If the other team takes <b>${set}</b>, you&rsquo;re <b>set</b> and lose ${c.amount} points.</p>`);
+  }
+  async function tutorialJoker(seat, card) {
+    T.seen.joker = true;
+    await lesson('The play', card.joker === 'big' ? 'That&rsquo;s the Big Joker' : 'That&rsquo;s the Little Joker',
+      `<p>The two jokers are the <b>highest trumps</b> — the Big Joker beats everything, then the Little Joker, then the ace of trump. ` +
+      `${isMe(seat) ? 'Nice — that one&rsquo;s yours.' : `${seatName(seat)} just played it.`}</p>` +
+      `<p>(In a No-Trump hand the jokers can&rsquo;t win anything — they&rsquo;re throw-offs.)</p>`);
+  }
+  async function tutorialBook(winner) {
+    T.books++;
+    if (T.books === 1) {
+      const us = myTeam();
+      await lesson('The play', `${isMe(winner) ? 'You' : seatName(winner)} took the book`,
+        `<p>The winning card takes the book, and that player <b>leads the next one</b>.</p>` +
+        `<p>Keep an eye on the gold badge on each nameplate and the <b>scoreboard</b>: your team has <b>${G.books[us]}</b> book${G.books[us] === 1 ? '' : 's'} so far (the kitty counts as one).</p>`);
+    } else if (T.books === 4 && !T.auto) {
+      const r = await lesson('Nice work', 'You&rsquo;ve got the hang of it',
+        `<p>That&rsquo;s the whole game: follow suit when you can, trump when you can&rsquo;t, and let your partner win when they&rsquo;ve got it.</p>` +
+        `<p>Want to keep playing the rest of the hand yourself, or watch me finish it?</p>`,
+        [{ label: 'I&rsquo;ll keep playing', value: 'me', primary: true }, { label: 'Finish the hand for me', value: 'auto' }]);
+      if (r === 'auto') { T.auto = true; if (G.view) setupTurn(G.view); }
+    }
+  }
+  async function tutorialScore(r) {
+    const us = myTeam();
+    const mine = r.bidTeam === us;
+    const books = r.books[r.bidTeam];
+    await lesson('Scoring', r.made ? (r.boston ? 'A Boston!' : 'You made it!') : 'Set!',
+      `<p>${mine ? 'Your team' : 'Their team'} took <b>${books}</b> books and needed <b>${r.needed}</b>.</p>` +
+      (r.made
+        ? `<p>A made bid scores <b>every book over six</b>: ${books} − 6 = <b>${r.delta} points</b>. That&rsquo;s why it pays to take extra books even after you&rsquo;ve made it.</p>`
+        : `<p>Getting set costs the bid: <b>${r.delta} points</b>.</p>`) +
+      `<p>If you&rsquo;d been set, you&rsquo;d have lost ${r.contract ? r.contract.amount : 4} instead. No-Trump bids score double either way. <b>First team to 7 wins the game.</b></p>`);
+    const end = await lesson('That&rsquo;s Bid Whist!', 'You&rsquo;re ready to play',
+      `<ol class="lesson-recap"><li><b>Bid</b> a number (books over six) — highest bid wins the kitty.</li>` +
+      `<li><b>Name trump</b> and Uptown or Downtown, then <b>bury six</b>.</li>` +
+      `<li><b>Follow suit</b> if you can; if you can&rsquo;t, <b>trump</b> it or throw off.</li>` +
+      `<li>Make your bid to score every book over six. First to 7 wins.</li></ol>` +
+      `<p>Tip: turn on <b>Coach</b> in Table Rules and it&rsquo;ll keep suggesting moves while you play.</p>`,
+      [{ label: 'Play the Computer', value: 'play', primary: true }, { label: 'Replay the Lesson', value: 'again' }, { label: 'Back to the Menu', value: 'menu' }]);
+    T.on = false; T.auto = false;
+    if (end === 'play') startSolo();
+    else if (end === 'again') startTutorial();
+    else if (end === 'menu') { $('splash').classList.add('show'); }
+  }
+
   // ---- solo -------------------------------------------------------------------
   // Solo runs the exact same room engine as online play (js/room-core.js), just
   // in the browser: a local "connection" hands it your moves and feeds its
   // snapshots back through the same renderer. One game, two transports.
-  function startSolo() {
-    const room = new RoomCore.Room('SOLO', E.cleanRules(G.nextRules || G.rules));
-    G.nextRules = null;
-    room.learner = G.learner; // the table keeps learning across games this session
+  function startSolo(opts) {
+    opts = opts || {};
+    if (!opts.tutorial) T.on = false;
+    const rules = opts.rules || E.cleanRules(G.nextRules || G.rules);
+    const room = new RoomCore.Room('SOLO', rules, opts.seed ? { rng: mulberry32(opts.seed) } : undefined);
+    if (!opts.rules) G.nextRules = null;
+    // The table keeps learning across games this session (a lesson starts fresh).
+    room.learner = opts.tutorial ? AI.createLearner() : G.learner;
     let token = null;
     const deliver = (obj) => setTimeout(() => onServerMessage(obj), 0);
     const conn = {
@@ -1313,6 +1598,7 @@
       G.view = msg.view; // expose the fresh roster so names resolve during animation
       await animateEvents(msg.events || []);
       applyView(msg.view);
+      if (T.on) await tutorialTurn(msg.view);
     }
     Online.draining = false;
   }
@@ -1331,6 +1617,7 @@
           G.seatBooks = [0, 0, 0, 0]; G.contract = null; G.memory = new Set(); G.lastTrick = null;
           clearTrick(); renderPlateBooks(); renderTrumpBadge();
           log(`— Hand ${ev.handNo}. <b>${seatName(ev.dealer)}</b> ${seatVerb(ev.dealer, 'deal')}. —`, true);
+          if (T.on) await tutorialDeal();
           Sound.play('shuffle');
           $('modal-summary').classList.remove('show');
           $('modal-gameover').classList.remove('show');
@@ -1346,6 +1633,7 @@
           break;
         case 'auction':
           tableMsg('');
+          if (T.on && isMe(ev.highSeat)) T.wonBid = true;
           log(`<b>${seatName(ev.highSeat)}</b> won the auction at <b>${E.describeBid(ev.bid)}</b>.`, true);
           break;
         case 'throwin':
@@ -1360,9 +1648,11 @@
             : seatVerb(ev.seat, 'name') + ' <b>' + E.SUIT_NAMES[c.trump] + '</b> trump, ' + c.type}.`, true);
           // Nobody plays until the call has been announced to the table.
           await announceContract(ev.seat, c);
+          if (T.on) await tutorialCalled(c);
           break;
         }
         case 'kitty':
+          if (T.on && isMe(ev.seat) && !T.seen.kitty) { T.seen.kitty = true; await tutorialKitty(); }
           if (ev.sport && ev.cards) {
             G.kitty = ev.cards; renderKitty('sported');
             tableMsg(`${seatName(ev.seat)} sports the kitty.`);
@@ -1379,6 +1669,7 @@
         case 'play':
           G.memory.add(ev.card.id);
           addPlayedCard(ev.seat, ev.card);
+          if (T.on && ev.card.joker && !T.seen.joker) { await wait(500); await tutorialJoker(ev.seat, ev.card); }
           if (!isMe(ev.seat)) { G.hands[ev.seat] && G.hands[ev.seat].pop(); renderOppHands(); if (ev.seat === G.viewSeat) renderHand(); }
           else if (G.hands && G.hands[ev.seat]) {
             // Your card leaves your hand the moment it's on the felt.
@@ -1396,6 +1687,7 @@
             G.lastTrick = { cards: (ev.cards || []).map((p) => ({ seat: p.player, card: p.card })), winner: ev.winner };
           }
           await collectTrick(ev.winner);
+          if (T.on) await tutorialBook(ev.winner);
           break;
         case 'discard':
           if (!isMe(ev.seat)) log(`${seatName(ev.seat)} takes the kitty and buries ${kittySize() === 4 ? 'four' : 'six'}.`);
@@ -1435,6 +1727,7 @@
           }
           G.handResult = { highSeat: ev.result.highSeat, made: ev.result.made, delta: ev.result.delta };
           renderBidChips();
+          if (T.on) { G.scores = ev.result.scores.slice(); G.books = ev.result.books.slice(); renderScores(); await tutorialScore(ev.result); break; }
           showOnlineSummary(ev.result);
           await wait(300);
           break;
@@ -1558,6 +1851,7 @@
       Online.conn.send({ type: 'intent', intent });
       actionHint('&nbsp;'); renderHand();
     };
+    if (T.on) tutorialLock(view);
     if (view.need === 'bid') {
       G.resolve = (bid) => send({ type: 'bid', bid });
       showBidPanel(!!(view.you && view.you.mustBid));
@@ -1594,9 +1888,11 @@
         G.coachIds = new Set([s2.card.id]);
         tip = `Coach: ${E.cardLabel(s2.card)} — ${s2.why}.`;
       }
+      if (T.on && T.play) { G.legalIds = new Set([T.play.card.id]); G.coachIds = new Set([T.play.card.id]); }
       renderHand(); actionHint('Your play.' + (ntJokerHold ? ' (Jokers are throw-offs in No-Trump — no leading them.)' : ''));
       if (tip) coachLine(tip);
     }
+    if (T.on) tutorialTip(view);
   }
 
   function coachLine(html) {
@@ -2007,6 +2303,13 @@
     e.target.value = '';
   });
   $('btn-rules').addEventListener('click', () => $('modal-howto').classList.add('show'));
+  $('btn-learn').addEventListener('click', startTutorial);
+  $('btn-howto-learn').addEventListener('click', () => {
+    if (G.mode === 'online' && G.running && !confirm('Leave this online table to play a guided hand?')) return;
+    if (G.mode === 'online' && Online.conn) { try { Online.conn.close(); } catch (_) { /* ignore */ } }
+    startTutorial();
+  });
+  $('btn-lesson-exit').addEventListener('click', exitTutorial);
   $('btn-howto-done').addEventListener('click', () => $('modal-howto').classList.remove('show'));
 
   renderScores();

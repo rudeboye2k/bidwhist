@@ -27,6 +27,13 @@ online play is powered by a small Cloudflare Worker.
   celebration. **Table Rules → Look & sound** picks the felt (green, burgundy,
   midnight blue, rent-party purple) and turns sound effects & vibration on or
   off (also in the menu). Sounds are synthesized in the browser — no files.
+- **Learn to Play:** a guided hand for newcomers (splash screen, or How to
+  Play → Play a Guided Hand). It deals a fixed hand chosen to show everything:
+  you outbid a 3 with a 4, take the kitty, name Spades Uptown, bury six,
+  follow suit, trump, meet the jokers, let your partner win, and make it.
+  A lesson card explains each moment; on your turn only the move being taught
+  is allowed, with the reason. After four books you can let it finish the hand
+  for you. The lesson's moves come from the same coach as the Coach option.
 - **Help at the table:** a badge on the felt always shows trump and which
   way it runs (trump cards get a gold edge in your hand); **Last book** shows
   the previous four cards; the bid panel explains each bid in plain English
