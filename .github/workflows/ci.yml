@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - run: node tests/engine.test.js
       - run: node tests/room.test.js
       - run: node tests/qrcode.test.js
@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Install test tools
         working-directory: tests/e2e
         # The runner image already has Chrome's system libraries, so only the
