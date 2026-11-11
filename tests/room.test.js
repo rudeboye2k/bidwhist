@@ -390,8 +390,6 @@ check('rooms have distinct codes', r1.code !== r2.code);
     check('auction closes straight into the kitty pickup', lastEvents.some((e) => e.t === 'kitty' && e.seat === 0) && !lastEvents.some((e) => e.t === 'declare'));
     check('a bid with a direction attached is stored as just the number', r.high.type === 'suit');
     check('high bidder already holds the kitty before naming trump (18 cards)', r.hands[0].length === 18 && r.kitty === null);
-    check('an old app (direction sent with the bid) can still name trump alone', r.high._dir === 'uptown');
-    delete r.high._dir; // a current app: direction comes with the trump
     check('naming trump without Uptown/Downtown is refused', r.submit(a.token, { type: 'declare', trump: 'H' }).error === 'bad-dir');
     const out = r.submit(a.token, { type: 'declare', trump: 'H', direction: 'downtown' });
     check('trump + direction named after the kitty', !out.error && r.contract.trump === 'H' && r.contract.type === 'downtown' && r.contract.direction === 'downtown');
@@ -456,6 +454,21 @@ check('rooms have distinct codes', r1.code !== r2.code);
   const r = new Room('FILT', {}, { now: () => now });
   const a = r.join('Ann');
   check('the server filters typed messages', r.say(a.token, 'deal the damn cards').events[0].text === 'deal the d*** cards');
+}
+
+// ---- review the hand ----
+{
+  const r = new Room('REVW', {}, { rng: seeded(77) });
+  const a = r.join('Ann');
+  r.start(a.token);
+  let g = 0;
+  while (r.phase !== 'handover' && r.phase !== 'gameover' && g++ < 500) if (!autoAct(r, a.token)) break;
+  const t = r.lastResult && r.lastResult.tricks;
+  check('the hand result carries every book', !!t && t.length === r.lastResult.books.reduce((x, y) => x + y, 0) - (r.rules.kittyIsBook ? 1 : 0));
+  check('each book has four cards and a winner', t.every((b) => b.cards.length === 4 && b.cards.some((p) => p.seat === b.winner)));
+  check('the last book is the last trick', JSON.stringify(t[t.length - 1]) === JSON.stringify(r.lastTrick));
+  r.nextHand(a.token);
+  check('a new hand starts a fresh record', r.handTricks.length === 0);
 }
 
 if (failures) { console.error('\n' + failures + ' failure(s)'); process.exit(1); }

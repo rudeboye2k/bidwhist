@@ -2,11 +2,16 @@
  * Cloudflare Worker + Durable Object for Bid Whist — serves the game AND runs
  * online play from one Worker, so the site and server share a URL.
  *
- *   Static files (index.html, js/, styles.css) are served by Workers Static
- *   Assets before this script runs. This script only sees /api/* requests:
+ *   Static files (js/, styles.css, images) are served by Workers Static
+ *   Assets before this script runs. This script sees /api/* requests, plus the
+ *   page and the service worker (wrangler.toml run_worker_first), which it
+ *   stamps with this deploy's version so every release busts old caches:
+ *     GET  / , /index.html, /sw.js → the file, with __V__ → the version id
  *     POST /api/new            → mint a fresh game key
  *     GET  /api/health         → liveness check
  *     WS   /api/room/:code/ws  → join that room's Durable Object
+ *     GET  /api/daily/:date    → that day's Daily Deal leaderboard
+ *     POST /api/daily/:date    → post a Daily Deal score (checked by replaying the moves)
  *
  *   GameRoom — ONE Durable Object per game key (idFromName(code)), so every
  *   game is a separate object with its own state and sockets. Rooms can't
@@ -16,14 +21,16 @@
  * moves while sockets stay open. So the room is saved to Durable Object
  * storage after every change and restored on wake, and each socket's player
  * token rides on the socket itself (serializeAttachment) rather than in memory.
+ * A table nobody has touched for a week is deleted (see IDLE_MS).
  */
 
 // js/room-core.js pulls in engine.js + ai.js through its own require()s. wrangler
 // bundles with esbuild, which treats these UMD files as CommonJS, so a plain
 // default import gives us their module.exports.
 import RoomCore from '../js/room-core.js';
+import Engine from '../js/engine.js';
 
-const { Room } = RoomCore;
+const { Room, replayDaily } = RoomCore;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -45,13 +52,53 @@ function makeCode() {
   return s;
 }
 
+// Files whose __V__ tokens become the deploy's version (cache busting with no
+// hand-edited ?v= numbers). Matches `run_worker_first` in wrangler.toml.
+const STAMPED = new Set(['/', '/index.html', '/sw.js']);
+
+function versionTag(env) {
+  const id = env.VERSION && env.VERSION.id; // version_metadata binding
+  return id ? String(id).replace(/[^A-Za-z0-9]/g, '').slice(0, 10) : 'dev';
+}
+
+async function stamped(request, env) {
+  // Ask for the full file every time: a 304 for an unchanged index.html would
+  // keep the browser on the old version tag after a deploy changed the scripts.
+  const headers = new Headers(request.headers);
+  headers.delete('If-None-Match');
+  headers.delete('If-Modified-Since');
+  const res = await env.ASSETS.fetch(new Request(request, { headers }));
+  if (res.status !== 200) return res; // e.g. /index.html → redirect to /
+  const body = (await res.text()).replaceAll('__V__', versionTag(env));
+  const out = new Headers(res.headers);
+  for (const h of ['ETag', 'Last-Modified', 'Content-Length']) out.delete(h);
+  out.set('Cache-Control', 'no-cache');
+  out.set('X-Content-Type-Options', 'nosniff');
+  out.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  out.set('X-Frame-Options', 'SAMEORIGIN');
+  return new Response(request.method === 'HEAD' ? null : body, { status: 200, headers: out });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
 
+    if (env.ASSETS && STAMPED.has(url.pathname) && (request.method === 'GET' || request.method === 'HEAD'))
+      return stamped(request, env);
     if (url.pathname === '/api/new' && request.method === 'POST') return json({ code: makeCode() });
     if (url.pathname === '/api/health') return json({ ok: true, service: 'bidwhist' });
+
+    const d = url.pathname.match(/^\/api\/daily\/(\d{4}-\d{2}-\d{2})$/);
+    if (d && (request.method === 'GET' || request.method === 'POST')) {
+      // Only today's deal (UTC) takes scores; yesterday's and tomorrow's are
+      // allowed too, for players just either side of midnight UTC.
+      const near = [-1, 0, 1].map((k) => Engine.dailyDate(new Date(Date.now() + k * 864e5)));
+      if (!near.includes(d[1])) return json({ error: 'bad-date' }, 400);
+      const stub = env.DAILY_BOARD.get(env.DAILY_BOARD.idFromName(d[1]));
+      const res = await stub.fetch(new Request('https://daily/' + d[1] + url.search, request));
+      return new Response(res.body, { status: res.status, headers: { 'Content-Type': 'application/json', ...CORS } });
+    }
 
     const m = url.pathname.match(/^\/api\/room\/([A-Za-z0-9]{3,8})\/ws$/);
     if (m) {
@@ -66,15 +113,21 @@ export default {
   },
 };
 
+// A table with no saved change for this long, and nobody connected, is deleted
+// so abandoned games don't pile up in storage. Its key then starts a fresh table.
+const IDLE_MS = 7 * 24 * 60 * 60 * 1000;
+
 export class GameRoom {
   constructor(state, env) {
     this.state = state;
     this.env = env;
     this.room = null;
+    this.active = Date.now(); // last saved change
     // Restore the saved game before handling any request or socket message.
     this.state.blockConcurrencyWhile(async () => {
-      const saved = await this.state.storage.get('room');
-      if (saved) this.room = Room.fromJSON(saved);
+      const saved = await this.state.storage.get(['room', 'active']);
+      if (saved.get('room')) this.room = Room.fromJSON(saved.get('room'));
+      if (saved.get('active')) this.active = saved.get('active');
     });
   }
 
@@ -84,7 +137,8 @@ export class GameRoom {
   }
 
   async _save() {
-    if (this.room) await this.state.storage.put('room', this.room.toJSON());
+    this.active = Date.now();
+    if (this.room) await this.state.storage.put({ room: this.room.toJSON(), active: this.active });
     await this._syncAlarm();
   }
 
@@ -175,16 +229,28 @@ export class GameRoom {
     this._broadcast(out && out.events);
   }
 
-  // Turn timer: one Durable Object alarm, always set to the current deadline.
+  // One Durable Object alarm serves two clocks: the turn timer (the current
+  // deadline) and the idle clean-up (a week after the last change).
   async _syncAlarm() {
     try {
-      if (this.room && this.room.deadline) await this.state.storage.setAlarm(this.room.deadline);
-      else await this.state.storage.deleteAlarm();
+      if (!this.room) return await this.state.storage.deleteAlarm();
+      const idleAt = this.active + IDLE_MS;
+      await this.state.storage.setAlarm(this.room.deadline ? Math.min(this.room.deadline, idleAt) : idleAt);
     } catch (_) { /* alarms unavailable: the timer simply doesn't fire */ }
   }
 
   async alarm() {
     if (!this.room) return;
+    if (Date.now() >= this.active + IDLE_MS) {
+      if (!this.state.getWebSockets().length) {
+        this.room = null;
+        await this.state.storage.deleteAlarm();
+        await this.state.storage.deleteAll();
+        return;
+      }
+      this.active = Date.now(); // someone's still sitting there: check again later
+      await this.state.storage.put('active', this.active);
+    }
     const out = this.room.timeout();
     if (out.events.length) {
       await this._save();
@@ -237,4 +303,54 @@ export class GameRoom {
       this._send(ws, { type: 'state', view, events: events || [] });
     }
   }
+}
+
+// ---- Daily Deal leaderboard -------------------------------------------------
+// One Durable Object per date. A score is only taken after replaying the
+// posted moves on that day's deal, so the number on the board is what really
+// happened. One entry per device; the first finished hand is the one that counts.
+const DAILY_TOP = 50;
+
+function cleanName(name) {
+  const plain = String(name || '').replace(/[<>&"'`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 20);
+  return Engine.filterChat(plain) || 'Player';
+}
+
+export class DailyBoard {
+  constructor(state) { this.state = state; }
+
+  async _board(device) {
+    const all = [...(await this.state.storage.list({ prefix: 'e:' })).values()];
+    all.sort((a, b) => b.net - a.net || b.books - a.books || a.at - b.at);
+    const top = all.slice(0, DAILY_TOP).map((e, i) => ({
+      rank: i + 1, name: e.name, avatar: e.avatar, net: e.net, books: e.books, you: !!device && e.device === device,
+    }));
+    const mineIdx = device ? all.findIndex((e) => e.device === device) : -1;
+    const you = mineIdx < 0 ? null : { rank: mineIdx + 1, net: all[mineIdx].net, books: all[mineIdx].books };
+    return { total: all.length, top, you };
+  }
+
+  async fetch(request) {
+    const date = new URL(request.url).pathname.slice(1);
+    if (request.method === 'GET') {
+      const device = new URL(request.url).searchParams.get('device') || '';
+      return Response.json(await this._board(/^[A-Za-z0-9-]{8,64}$/.test(device) ? device : null));
+    }
+    let body;
+    try { body = await request.json(); } catch (_) { return Response.json({ error: 'bad-json' }, { status: 400 }); }
+    const device = String(body.device || '');
+    if (!/^[A-Za-z0-9-]{8,64}$/.test(device)) return Response.json({ error: 'bad-device' }, { status: 400 });
+    const key = 'e:' + device;
+    if (!(await this.state.storage.get(key))) {
+      const score = replayDaily(date, body.moves);
+      if (score.error) return Response.json({ error: score.error }, { status: 400 });
+      const avatar = typeof body.avatar === 'string' && body.avatar.length <= 40 ? body.avatar : null;
+      await this.state.storage.put(key, { device, name: cleanName(body.name), avatar, net: score.net, books: score.books, at: Date.now() });
+      // A day's board is only interesting for a while: clear it out after a week.
+      await this.state.storage.setAlarm(Date.now() + 7 * 864e5);
+    }
+    return Response.json(await this._board(device));
+  }
+
+  async alarm() { await this.state.storage.deleteAll(); }
 }

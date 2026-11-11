@@ -26,15 +26,31 @@ workers_dev = true
 # The static game (index.html, styles.css, js/, _headers) is served straight
 # from the repo root; .assetsignore keeps server code, tests and docs out.
 # Requests that don't match a file (i.e. /api/*) fall through to the Worker.
+# The page and service worker go through the Worker first, which stamps them
+# with this deploy's version (the ?v= cache-busting tags) — nothing to bump by hand.
 [assets]
 directory = "."
 binding = "ASSETS"
+run_worker_first = ["/", "/index.html", "/sw.js"]
+
+# This deploy's version id, used for that stamp.
+[version_metadata]
+binding = "VERSION"
 
 # One Durable Object class = one authoritative game room per game key.
 [[durable_objects.bindings]]
 name = "GAME_ROOM"
 class_name = "GameRoom"
 
+# The Daily Deal leaderboard: one Durable Object per day.
+[[durable_objects.bindings]]
+name = "DAILY_BOARD"
+class_name = "DailyBoard"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["GameRoom"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["DailyBoard"]

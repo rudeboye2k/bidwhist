@@ -1,0 +1,12 @@
+{
+  "name": "givemedakitty-e2e",
+  "private": true,
+  "description": "Browser tests for Give Me Da Kitty. Kept out of the repo root so the Cloudflare deploy never installs them.",
+  "scripts": {
+    "test": "node run-all.js"
+  },
+  "dependencies": {
+    "playwright-core": "1.64.1",
+    "ws": "8.18.0"
+  }
+}

@@ -286,8 +286,29 @@
     });
   }
 
+  // ---- seeded deals ----------------------------------------------------------
+  // A small seeded RNG (mulberry32): the same seed always deals the same cards.
+  // Used by Learn to Play and the Daily Deal.
+  function seededRng(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  // The Daily Deal: one date (UTC, YYYY-MM-DD) → one seed, for everyone.
+  function dailyDate(d) { return (d || new Date()).toISOString().slice(0, 10); }
+  function dailySeed(date) {
+    let h = 2166136261; // FNV-1a
+    for (const ch of 'gmdk-daily:' + date) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+    return (h >>> 0) || 1;
+  }
+
   return {
     SUITS, SUIT_NAMES, SUIT_GLYPHS, DEFAULT_RULES, REACTIONS, cleanRules, filterChat,
+    seededRng, dailyDate, dailySeed,
     newDeck, shuffle, deal,
     bidKind, bidValue, isLegalBid, describeBid, describeContract, booksToSet,
     effectiveSuit, rankPower, cardPower, trickLedSuit, legalPlays, allowedPlays, isRenege, trickWinner,

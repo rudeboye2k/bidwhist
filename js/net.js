@@ -1,40 +1,20 @@
 /* Bid Whist networking — thin transport only. The online game controller lives
- * in app.js and uses this to talk to the Cloudflare Worker backend. */
+ * in js/app/play.js and uses this to talk to the Cloudflare Worker backend. */
 (function () {
   'use strict';
 
-  // v2 key: the old 'bidwhist.server' could hold a URL that never existed, so
-  // it's discarded rather than trusted.
-  const SERVER_KEY = 'bidwhist.serverUrl';
-  try { localStorage.removeItem('bidwhist.server'); } catch (_) { /* ignore */ }
+  // Older versions saved a custom server URL; it's no longer used.
+  try { localStorage.removeItem('bidwhist.server'); localStorage.removeItem('bidwhist.serverUrl'); } catch (_) { /* ignore */ }
 
   const clean = (u) => String(u || '').trim().replace(/\/$/, '');
 
   // The game and the server are one Worker, so the page's own origin IS the
-  // server. An explicit window.BIDWHIST_SERVER overrides that (e.g. if the
-  // site is hosted somewhere else, like GitHub Pages).
-  function defaultServer() {
+  // server. window.BIDWHIST_SERVER overrides that only if the page is hosted
+  // somewhere else.
+  function serverBase() {
     if (window.BIDWHIST_SERVER) return clean(window.BIDWHIST_SERVER);
     if (/^https?:$/.test(location.protocol)) return location.origin;
     return '';
-  }
-
-  // A custom URL the player typed wins; otherwise the default.
-  function serverBase() {
-    try {
-      const s = clean(localStorage.getItem(SERVER_KEY));
-      if (s) return s;
-    } catch (_) { /* ignore */ }
-    return defaultServer();
-  }
-  // Only remember a URL that differs from the default, so the default can
-  // change later without a stale value pinning old browsers to it.
-  function saveServer(url) {
-    const u = clean(url);
-    try {
-      if (!u || u === defaultServer()) localStorage.removeItem(SERVER_KEY);
-      else localStorage.setItem(SERVER_KEY, u);
-    } catch (_) { /* ignore */ }
   }
 
   function wsUrl(base, code) {
@@ -68,5 +48,5 @@
     };
   }
 
-  window.Net = { serverBase, defaultServer, saveServer, newCode, connect };
+  window.Net = { serverBase, newCode, connect };
 })();

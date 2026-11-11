@@ -286,6 +286,7 @@
       this.lastResult = null;
       this.lastTrick = null;         // { cards, winner } of the previous book
       this.reneges = [];             // renege house rule: { seat, suit, revealed, called }
+      this.handTricks = [];          // every book of this hand, for "Review the hand"
       this.trickNo = 0;
     }
 
@@ -368,9 +369,6 @@
       // A bid is just the number, or the number + No-Trump (see Engine.bidKind).
       this.bids[seat] = bid.pass ? { pass: true } : { amount: bid.amount, type: E.bidKind(bid.type) };
       if (!bid.pass) {
-        // An app that hasn't refreshed since this change still sends a
-        // direction with the bid (and none at declare) — remember it for them.
-        if (bid.type === 'uptown' || bid.type === 'downtown') this.bids[seat]._dir = bid.type;
         this.bids[seat]._seat = seat;
         this.high = this.bids[seat]; this.highSeat = seat;
       }
@@ -414,10 +412,8 @@
     _applyDeclare(seat, msg, events) {
       if (this.phase !== 'declare' || seat !== this.highSeat) return { error: 'bad-phase' };
       // Plain bid: name the trump suit AND Uptown/Downtown. No-Trump: direction.
-      // (A bid saved before this change may still carry its direction.)
       let trump = null;
-      const saved = this.high._dir || (this.high.type === 'uptown' || this.high.type === 'downtown' ? this.high.type : null);
-      const direction = msg.direction === 'uptown' || msg.direction === 'downtown' ? msg.direction : saved;
+      const direction = msg.direction === 'uptown' || msg.direction === 'downtown' ? msg.direction : null;
       if (!direction) return { error: 'bad-dir' };
       if (this.high.type !== 'notrump') {
         if (!E.SUITS.includes(msg.trump)) return { error: 'bad-suit' };
@@ -426,7 +422,6 @@
       this.moveNo++;
       const type = this.high.type === 'notrump' ? 'notrump' : direction;
       this.contract = { amount: this.high.amount, type, trump, direction };
-      this._takeKitty(seat, events); // a room saved mid-auction before this change
       events.push({ t: 'declare', seat, contract: this.contract });
       this.phase = 'discard';
       this.turn = this.highSeat;
@@ -490,6 +485,7 @@
       this.seatBooks[winner]++;
       events.push({ t: 'trick', winner, cards: this.trick.slice() });
       this.lastTrick = { cards: this.trick.map((p) => ({ seat: p.player, card: p.card })), winner };
+      (this.handTricks || (this.handTricks = [])).push(this.lastTrick);
       this.trickNo++;
       this.trick = [];
       const handDone = this.hands.every((h) => h.length === 0);
@@ -520,6 +516,12 @@
         bidTeam, books: this.books.slice(), needed: res.needed, delta: res.delta,
         made: res.made, boston: this.books[bidTeam] === 13, scores: this.scores.slice(),
         penalties,
+        // The hand book by book (all cards are face up by now); a called
+        // renege is marked on the book where it happened.
+        tricks: (this.handTricks || []).map((t, i) => {
+          const r = this.reneges.find((x) => x.called && x.trickNo === i);
+          return r ? Object.assign({ renege: r.seat }, t) : t;
+        }),
       };
       this._recordHand(bidTeam, res);
       aiLib.observeHand(this.learner, {
@@ -815,5 +817,33 @@
     }
   }
 
-  return { Room };
+  // ---- the Daily Deal ------------------------------------------------------------
+  // Everyone plays the same hand each day: default rules, the day's seed, fresh
+  // computer players. The server checks a posted score by replaying the moves.
+  const DAILY_RULES = E.cleanRules(E.DEFAULT_RULES);
+  function dailyRoom(date) {
+    const room = new Room('DAILY', DAILY_RULES, { rng: E.seededRng(E.dailySeed(date)) });
+    room.learner = aiLib.createLearner();
+    return room;
+  }
+  // You're seat 0 (team 0). Score = your team's points minus theirs this hand.
+  function dailyScore(result) {
+    const net = result.bidTeam === 0 ? result.delta : -result.delta;
+    return { net, books: result.books[0], made: !!result.made, bidder: result.highSeat, contract: result.contract };
+  }
+  function replayDaily(date, moves) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Array.isArray(moves) || moves.length > 60) return { error: 'bad-input' };
+    const room = dailyRoom(date);
+    const { token } = room.join('You');
+    room.start(token);
+    for (const m of moves) {
+      if (room.phase !== 'bidding' && room.phase !== 'declare' && room.phase !== 'discard' && room.phase !== 'playing') break;
+      const out = room.submit(token, m);
+      if (out && out.error) return { error: 'bad-move' };
+    }
+    if ((room.phase !== 'handover' && room.phase !== 'gameover') || !room.lastResult) return { error: 'unfinished' };
+    return dailyScore(room.lastResult);
+  }
+
+  return { Room, dailyRoom, dailyScore, replayDaily };
 });

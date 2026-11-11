@@ -3,10 +3,12 @@
  * last copy cached here when there's no signal. Solo play needs nothing from
  * the server, so a phone that's been here once can play the computer offline.
  * Online play (/api/*) is never cached. */
-const CACHE = 'gmdk-v9';
+const CACHE = 'gmdk-__V__'; // the server stamps the deploy's version here (see server/worker.js)
 const SHELL = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
-  'js/engine.js', 'js/ai.js', 'js/room-core.js', 'js/qrcode.js', 'js/net.js', 'js/app.js',
+  'js/engine.js', 'js/ai.js', 'js/room-core.js', 'js/qrcode.js', 'js/net.js',
+  'js/app/core.js', 'js/app/effects.js', 'js/app/table.js', 'js/app/actions.js', 'js/app/tutorial.js',
+  'js/app/play.js', 'js/app/settings.js', 'js/app/daily.js', 'js/app/main.js',
   'img/icon-192.png', 'img/icon-512.png', 'img/apple-touch-icon.png', 'img/favicon-32.png',
 ];
 
@@ -45,4 +47,13 @@ self.addEventListener('fetch', (e) => {
       throw err;
     }
   })());
+});
+
+// A turn notification was tapped: bring the game back to the front.
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    const open = list.find((c) => 'focus' in c);
+    return open ? open.focus() : self.clients.openWindow('./');
+  }));
 });

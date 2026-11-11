@@ -42,8 +42,28 @@ page elsewhere, e.g. GitHub Pages, set `window.BIDWHIST_SERVER` in `index.html`
 to the Worker's URL.)
 
 Routes: `POST /api/new` (mint a game key), `GET /api/health` (liveness),
-`WS /api/room/:code/ws` (join that room). Everything else is a static file;
+`WS /api/room/:code/ws` (join that room), `GET|POST /api/daily/:date` (the
+Daily Deal leaderboard). Everything else is a static file;
 `.assetsignore` keeps `server/`, `tests/` and docs out of the public assets.
+
+The page (`/`, `/index.html`) and `sw.js` go through the Worker first
+(`run_worker_first`): it swaps their `__V__` tokens for the deploy's version id
+(`version_metadata` binding), so script URLs and the offline cache change on
+every deploy by themselves.
+
+## Daily Deal
+
+`DailyBoard` is one Durable Object per date (UTC; only yesterday/today/tomorrow
+are accepted). A client posts its device id, name, avatar and the list of moves
+it made; the board replays them on that day's deal (`RoomCore.replayDaily`:
+the date's seed, default rules, fresh bots — fully deterministic) and stores the
+real score, once per device. Boards delete themselves a week later (alarm).
+
+## Idle tables
+
+Every save records when the table last changed. The same alarm used by the
+turn timer is also set a week past that; if it fires and nobody is connected,
+the room's storage is deleted (the game key then starts a fresh table).
 
 ## Turn timer
 

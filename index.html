@@ -33,7 +33,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Libre+Franklin:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=19">
+<link rel="stylesheet" href="styles.css?v=__V__">
 <script>try{var L=localStorage,d=document.documentElement,f=L.getItem('bidwhist.felt');if(f)d.setAttribute('data-felt',f);if(L.getItem('bidwhist.bigCards')==='on')d.setAttribute('data-cards','big');if(L.getItem('bidwhist.fourColor')==='on')d.setAttribute('data-deck','four')}catch(e){}</script>
 </head>
 <body>
@@ -73,17 +73,14 @@
         </div>
 
         <div class="seat seat-north" id="seat-2">
-          <div class="opp-hand" id="opp-hand-2"></div>
           <div class="nameplate" id="plate-2"><span class="avatar"></span><span class="np-text"><span class="pname">Marcus</span><span class="prole">your partner</span></span><span class="np-books" aria-label="books taken"></span></div>
           <div class="bid-chip" id="chip-2"></div>
         </div>
         <div class="seat seat-west" id="seat-1">
-          <div class="opp-hand vertical" id="opp-hand-1"></div>
           <div class="nameplate" id="plate-1"><span class="avatar"></span><span class="np-text"><span class="pname">Pearl</span><span class="prole">west</span></span><span class="np-books" aria-label="books taken"></span></div>
           <div class="bid-chip" id="chip-1"></div>
         </div>
         <div class="seat seat-east" id="seat-3">
-          <div class="opp-hand vertical" id="opp-hand-3"></div>
           <div class="nameplate" id="plate-3"><span class="avatar"></span><span class="np-text"><span class="pname">Deacon</span><span class="prole">east</span></span><span class="np-books" aria-label="books taken"></span></div>
           <div class="bid-chip" id="chip-3"></div>
         </div>
@@ -154,6 +151,10 @@
         <button class="btn primary big" id="btn-deal-in" type="button">Play the Computer</button>
         <button class="btn ghost big" id="btn-play-online" type="button">Play Online</button>
         <button class="btn ghost big learn" id="btn-learn" type="button">🎓 Learn to Play</button>
+        <div class="splash-more">
+          <button class="btn ghost" id="btn-daily" type="button">📅 Daily Deal</button>
+          <button class="btn ghost" id="btn-rejoin" type="button" hidden>&#8617; Table <b id="rejoin-code"></b></button>
+        </div>
       </div>
       <button class="splash-profile" id="splash-profile" type="button">
         <span class="avatar" id="splash-avatar"></span>
@@ -173,14 +174,6 @@
         <span class="profile-summary-name" id="online-pname">You</span>
         <button class="btn ghost small" id="btn-edit-profile" type="button">Edit name &amp; avatar</button>
       </div>
-      <details class="online-advanced" id="online-advanced">
-        <summary>Server settings</summary>
-        <div class="online-field">
-          <label for="online-server">Server URL</label>
-          <input type="text" id="online-server" placeholder="https://bidwhist.…workers.dev" autocomplete="off">
-          <p class="online-sub">Leave as-is — it's this site. Only change it if your game server lives elsewhere.</p>
-        </div>
-      </details>
       <div class="online-split">
         <div class="online-col">
           <button class="btn primary" id="btn-host" type="button">Host a Table</button>
@@ -269,6 +262,7 @@
       <h2 class="modal-title" id="summary-title"></h2>
       <div class="summary-body" id="summary-body"></div>
       <button class="btn primary" id="btn-next-hand" type="button">Next Hand</button>
+      <button class="btn ghost small review-btn" id="btn-review-hand" type="button" hidden>Review the hand</button>
     </div>
   </div>
 
@@ -317,6 +311,7 @@
         <label class="setting check"><input type="checkbox" id="pref-coach"><span>Coach: suggest bids and plays</span></label>
         <label class="setting check"><input type="checkbox" id="pref-big"><span>Bigger cards in my hand</span></label>
         <label class="setting check"><input type="checkbox" id="pref-four"><span>Four-color deck (blue &diams;, green &clubs;)</span></label>
+        <label class="setting check" id="pref-notify-row" hidden><input type="checkbox" id="pref-notify"><span>Online: notify me when it&rsquo;s my turn and I&rsquo;m in another app</span></label>
       </div>
       <button class="btn primary" id="btn-settings-done" type="button">Done</button>
     </div>
@@ -348,7 +343,21 @@
       </div>
       <div class="modal-actions howto-actions">
         <button class="btn primary" id="btn-howto-learn" type="button">Play a Guided Hand</button>
+        <button class="btn ghost" id="btn-howto-learn2" type="button">Lesson 2: No-Trump</button>
         <button class="btn ghost" id="btn-howto-done" type="button">Back to the Table</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Daily Deal leaderboard -->
+  <div class="overlay" id="modal-daily">
+    <div class="modal">
+      <h2 class="modal-title">Daily Deal</h2>
+      <p class="modal-note" id="daily-note"></p>
+      <ul class="roster daily-board" id="daily-board"></ul>
+      <div class="modal-actions">
+        <button class="btn primary" id="btn-daily-play" type="button">Deal Today&rsquo;s Hand</button>
+        <button class="btn ghost" id="btn-daily-close" type="button">Back to the Menu</button>
       </div>
     </div>
   </div>
@@ -356,9 +365,13 @@
   <!-- Last book -->
   <div class="overlay" id="modal-lastbook">
     <div class="modal">
-      <h2 class="modal-title">Last book</h2>
+      <h2 class="modal-title" id="lastbook-title">Last book</h2>
       <div class="lastbook" id="lastbook"></div>
       <p class="online-sub" id="lastbook-note"></p>
+      <div class="review-nav" id="review-nav" hidden>
+        <button class="btn ghost small" id="btn-review-prev" type="button">&lsaquo; Earlier</button>
+        <button class="btn ghost small" id="btn-review-next" type="button">Later &rsaquo;</button>
+      </div>
       <button class="btn primary" id="btn-lastbook-done" type="button">Back to the Table</button>
     </div>
   </div>
@@ -392,17 +405,25 @@
   </div>
 </div>
 
-<script src="js/engine.js?v=19"></script>
-<script src="js/ai.js?v=19"></script>
+<script src="js/engine.js?v=__V__"></script>
+<script src="js/ai.js?v=__V__"></script>
 <script>
   // The site and the game server are one Cloudflare Worker, so the server is
   // simply this page's own address — nothing to configure. Only if you host the
   // page somewhere else (e.g. GitHub Pages) would you point it at the Worker:
   // window.BIDWHIST_SERVER = "https://bidwhist.<your-subdomain>.workers.dev";
 </script>
-<script src="js/room-core.js?v=19"></script>
-<script src="js/qrcode.js?v=19"></script>
-<script src="js/net.js?v=19"></script>
-<script src="js/app.js?v=19"></script>
+<script src="js/room-core.js?v=__V__"></script>
+<script src="js/qrcode.js?v=__V__"></script>
+<script src="js/net.js?v=__V__"></script>
+<script src="js/app/core.js?v=__V__"></script>
+<script src="js/app/effects.js?v=__V__"></script>
+<script src="js/app/table.js?v=__V__"></script>
+<script src="js/app/actions.js?v=__V__"></script>
+<script src="js/app/tutorial.js?v=__V__"></script>
+<script src="js/app/play.js?v=__V__"></script>
+<script src="js/app/settings.js?v=__V__"></script>
+<script src="js/app/daily.js?v=__V__"></script>
+<script src="js/app/main.js?v=__V__"></script>
 </body>
 </html>

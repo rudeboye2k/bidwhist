@@ -1,0 +1,59 @@
+# Checks every push and pull request. Deploys are separate (Cloudflare Workers
+# Builds deploys main on its own); this only reports whether the game still works.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit:
+    name: Rules, rooms, AI
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node tests/engine.test.js
+      - run: node tests/room.test.js
+      - run: node tests/qrcode.test.js
+      - run: node tests/worker.test.mjs
+      - run: node tests/simulate.js 300
+      - run: node tests/levels.js 2000
+
+  browser:
+    name: Browser (desktop + phone, solo + online)
+    needs: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install test tools
+        working-directory: tests/e2e
+        run: |
+          npm ci
+          npx playwright-core install --with-deps chromium
+      - name: Start the game locally (Worker + Durable Objects)
+        run: |
+          npx --yes wrangler@4 dev --port 8787 --ip 127.0.0.1 > wrangler.log 2>&1 &
+          for i in $(seq 1 90); do curl -sf http://127.0.0.1:8787/api/health && break; sleep 2; done
+      - name: Run browser tests
+        working-directory: tests/e2e
+        env:
+          E2E_ORIGIN: http://127.0.0.1:8787
+          E2E_OUT: ${{ runner.temp }}/gmdk-e2e
+        run: node run-all.js
+      - name: Screenshots and server log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-output
+          path: |
+            ${{ runner.temp }}/gmdk-e2e
+            wrangler.log
+          if-no-files-found: ignore

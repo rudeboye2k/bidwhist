@@ -34,6 +34,24 @@ online play is powered by a small Cloudflare Worker.
   A lesson card explains each moment; on your turn only the move being taught
   is allowed, with the reason. After four books you can let it finish the hand
   for you. The lesson's moves come from the same coach as the Coach option.
+  **Lesson 2: No-Trump & Downtown** (from the end of Lesson 1, or How to
+  Play) is a second fixed deal: everyone passes, you're the dealer and must
+  bid, and a fistful of low cards makes 3 No-Trump Downtown — bury the useless
+  joker, see why the led suit wins, and score it double.
+- **Daily Deal:** one hand a day with the same cards for everyone (default
+  rules, fresh computer players), and a shared leaderboard. Your score is your
+  team's points minus theirs (ties go to more books). The server replays your
+  moves on that day's deal before your score goes up, so it can't be faked;
+  one entry per device, first finished hand counts. New deal at midnight UTC.
+- **Review the hand:** after any hand, step through all its books (who led,
+  who won, any called renege) from the hand summary.
+- **Back to your table:** close the tab or lose signal mid-game and the start
+  screen offers **Table ABCDE** for 12 hours — one tap and you're back in
+  your seat (a bot covers it meanwhile). Leaving the table clears it. If a
+  hand ended while you were away, the result comes up so the host can deal on.
+- **Turn alerts (online):** the tab title says *Your turn* when you're up and
+  the game isn't on screen; switch on **Table Rules → Look & sound → notify me**
+  for a notification too.
 - **Help at the table:** a badge on the felt always shows trump and which
   way it runs (trump cards get a gold edge in your hand); **Last book** shows
   the previous four cards; the bid panel explains each bid in plain English
@@ -219,13 +237,29 @@ js/room-core.js     the game itself: authoritative state machine — runs on the
                     server for online play AND in the browser for solo
 js/net.js           WebSocket transport for online play
 js/qrcode.js        self-contained QR generator for invite links
-js/app.js           game flow, DOM rendering, and the online controller
-server/worker.js    Worker entry (/api/*) + GameRoom Durable Object (+ turn-timer alarm)
+js/app/*.js         the app, in load order (one shared scope, no build step):
+                      core.js      state G, seats & names, profile & avatars
+                      effects.js   sound, banners, confetti, the trump call, turn alerts
+                      table.js     drawing the table, last book / hand review, reactions, coach
+                      actions.js   your turn: bid panel, naming trump, burying, card taps
+                      tutorial.js  Learn to Play (lessons 1 and 2)
+                      play.js      solo + online games, events & animation, lobby, results, rejoin
+                      settings.js  profile editor, Table Rules
+                      daily.js     the Daily Deal and its leaderboard
+                      main.js      wiring, preferences, service worker
+server/worker.js    Worker: /api/* + version stamp; GameRoom and DailyBoard Durable Objects
 sw.js               service worker: offline solo + installable app
 wrangler.toml       the one Worker: static site + server + Durable Object
 .assetsignore       keeps server code, tests and docs out of public assets
-tests/              engine tests, AI-vs-AI simulator, room-core tests
+tests/              engine/room/QR/server tests, AI-vs-AI simulators
+tests/e2e/          browser tests (desktop + phone, solo + online) — see below
+.github/workflows/  CI: runs all of the above on every push
 ```
+
+Cache busting is automatic: `index.html` and `sw.js` carry `__V__` tokens that
+the Worker replaces with the deploy's version id, so every deploy reaches
+players at once — no `?v=` numbers to bump by hand. Online tables nobody has
+touched for a week (and nobody is connected to) are deleted.
 
 `engine.js`, `ai.js`, and `room-core.js` are dependency-free and load in both
 the browser and Node. Solo and online run the *same* room code — solo just
@@ -238,7 +272,19 @@ node tests/simulate.js 400   # paired AI sim: learner is harmless + responsive
 node tests/levels.js 3000    # paired AI sim: Sharp > Regular > Easy
 node tests/room.test.js      # authoritative room: turns, card hiding, isolation
 node tests/qrcode.test.js    # QR encoder: RS syndromes + structure
+node tests/worker.test.mjs   # version stamp, idle clean-up, Daily Deal board
 ```
+
+Browser tests drive real pages with Playwright against a local copy of the
+Worker (CI does this on every push):
+
+```sh
+npx wrangler dev --port 8787            # in the repo root
+cd tests/e2e && npm ci && node run-all.js   # or: node run-all.js daily rejoin
+```
+
+Screenshots go to your temp folder (`E2E_OUT` to change it) — not the repo,
+because `wrangler dev` reloads, dropping every socket, when a project file changes.
 
 Key engine formulas: a contract needs `6 + bid` books; defenders set it at
 `13 − (6 + bid) + 1 = 8 − bid` books.
