@@ -45,7 +45,7 @@ jobs:
           fi
       - name: Start the game locally (Worker + Durable Objects)
         run: |
-          npx --yes wrangler@4 dev --port 8787 --ip 127.0.0.1 > wrangler.log 2>&1 &
+          npx --yes wrangler@4 dev --port 8787 --ip 127.0.0.1 > "$RUNNER_TEMP/wrangler.log" 2>&1 &  # log OUTSIDE the project: wrangler dev reloads (dropping every socket) when a project file changes
           for i in $(seq 1 90); do curl -sf http://127.0.0.1:8787/api/health && break; sleep 2; done
       - name: Run browser tests
         working-directory: tests/e2e
@@ -60,5 +60,5 @@ jobs:
           name: e2e-output
           path: |
             ${{ runner.temp }}/gmdk-e2e
-            wrangler.log
+            ${{ runner.temp }}/wrangler.log
           if-no-files-found: ignore
