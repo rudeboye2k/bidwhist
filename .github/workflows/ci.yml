@@ -44,9 +44,17 @@ jobs:
             echo "CHROMIUM_PATH=$(command -v google-chrome || command -v chromium)" >> "$GITHUB_ENV"
           fi
       - name: Start the game locally (Worker + Durable Objects)
+        timeout-minutes: 5
+        # The log goes OUTSIDE the project: wrangler dev reloads (dropping every
+        # socket) whenever a project file changes. No stdin, so it can never
+        # sit waiting on a prompt; each health check gives up after 5 seconds.
         run: |
-          npx --yes wrangler@4 dev --port 8787 --ip 127.0.0.1 > "$RUNNER_TEMP/wrangler.log" 2>&1 &  # log OUTSIDE the project: wrangler dev reloads (dropping every socket) when a project file changes
-          for i in $(seq 1 90); do curl -sf http://127.0.0.1:8787/api/health && break; sleep 2; done
+          npx --yes wrangler@4.158.0 dev --port 8787 --ip 127.0.0.1 < /dev/null > "$RUNNER_TEMP/wrangler.log" 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf --max-time 5 http://127.0.0.1:8787/api/health && exit 0
+            sleep 2
+          done
+          echo "Server didn't start:"; tail -50 "$RUNNER_TEMP/wrangler.log"; exit 1
       - name: Run browser tests
         working-directory: tests/e2e
         env:
