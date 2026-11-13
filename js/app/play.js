@@ -445,9 +445,8 @@ function applyView(view) {
   renderScores(); renderContractLine(); renderPlates(); renderRecordLine();
   renderBidChips(); renderSeatsMeta(view.turn);
   startTurnClock(view);
-  // The pile sits on the felt through the bidding; the high bidder takes it
-  // the moment the auction closes.
-  renderKitty(view.phase === 'bidding' ? 'back' : 'gone');
+  // The pile sits on the felt until the high bidder has made the call.
+  renderKitty(view.phase === 'bidding' || view.phase === 'declare' ? 'back' : 'gone');
   renderHand();
   setupTurn(view);
   // Arrived between hands (reconnected, or a bot finished the hand while you

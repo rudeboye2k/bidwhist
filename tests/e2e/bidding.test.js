@@ -1,4 +1,4 @@
-// New bidding: number only → win → kitty in hand → name trump + direction → bury.
+// Bidding: number only → win → name trump + direction (kitty still down) → take the kitty → bury.
 const { chromium, devices } = require('./helpers');
 const { ORIGIN, WS, OUT } = require('./helpers');
 const OUTDIR = OUT + '/bid';
@@ -34,8 +34,8 @@ const check = (n, c) => { if (c) { pass++; console.log('PASS ', n); } else { fai
       won = true;
       await p.waitForTimeout(900);
       const n = await p.$$eval('#hand .card', (x) => x.length);
-      check(`${name}: kitty is already in your hand when you name trump (${n} cards)`, n === 18);
-      check(`${name}: kitty pile is gone from the table`, await p.$eval('#kitty', (k) => k.classList.contains('gone')));
+      check(`${name}: you name trump from your own 12 cards (${n} cards)`, n === 12);
+      check(`${name}: kitty pile still on the table while you call`, !(await p.$eval('#kitty', (k) => k.classList.contains('gone'))));
       const log = await p.textContent('#log');
       check(`${name}: table talk shows a plain number bid`, /bid 7\./.test(log));
       const go = await p.$('#action-bar .btn.primary');
@@ -50,6 +50,8 @@ const check = (n, c) => { if (c) { pass++; console.log('PASS ', n); } else { fai
       const badge = await p.textContent('#trump-badge');
       check(`${name}: trump badge shows Hearts, Downtown`, /Hearts/.test(badge) && /Downtown/.test(badge));
       check(`${name}: then bury six`, (await p.textContent('#btn-discard-done')).includes('Six'));
+      check(`${name}: the kitty is in your hand after the call (18 cards)`, (await p.$$eval('#hand .card', (x) => x.length)) === 18);
+      check(`${name}: kitty pile is gone from the table`, await p.$eval('#kitty', (k) => k.classList.contains('gone')));
       await p.screenshot({ path: `${OUTDIR}/${name}-3-bury.png` });
       check(`${name}: no sideways scroll`, await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     }

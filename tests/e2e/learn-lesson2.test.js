@@ -60,7 +60,7 @@ async function runLesson(b, label, opts) {
   check(`${label}: only Downtown can be called (${dirLock})`, /Uptown.*:off \| Downtown.*:on/.test(dirLock || ''));
   check(`${label}: six cards outlined to bury`, buried === 6);
   const want = ['No-Trump: no boss suit', 'Downtown: low cards win', 'Your 12 cards', 'Everyone passed — and you’re the dealer',
-    'You won it — give me da kitty!', 'Call it Downtown', 'Everyone knows the deal now', 'Bury six cards', 'You lead the first book'];
+    'Call it Downtown', 'Everyone knows the deal now', 'You won it — give me da kitty!', 'Bury six cards', 'You lead the first book'];
   check(`${label}: lessons come in teaching order`, want.every((w, i) => titles[i] === w));
   check(`${label}: covers the joker throw-off and scoring`, titles.some((t) => /worth nothing here/.test(t)) && titles.includes('You made it!'));
   check(`${label}: No-Trump scores double (${scoreSeen})`, scoreSeen === '6');

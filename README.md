@@ -29,7 +29,7 @@ online play is powered by a small Cloudflare Worker.
   off (also in the menu). Sounds are synthesized in the browser — no files.
 - **Learn to Play:** a guided hand for newcomers (splash screen, or How to
   Play → Play a Guided Hand). It deals a fixed hand chosen to show everything:
-  you outbid a 3 with a 4, take the kitty, name Spades Uptown, bury six,
+  you outbid a 3 with a 4, name Spades Uptown, take the kitty, bury six,
   follow suit, trump, meet the jokers, let your partner win, and make it.
   A lesson card explains each moment; on your turn only the move being taught
   is allowed, with the reason. After four books you can let it finish the hand
@@ -59,8 +59,8 @@ online play is powered by a small Cloudflare Worker.
   (Table Rules → Help & readability) suggests bids, trump, what to bury and
   which card to play, with a reason. Coach uses the same brain as the
   computer players.
-- **The call is announced:** once the high bidder (person or computer) has
-  the kitty and names trump, the table shows who called it, the contract
+- **The call is announced:** once the high bidder (person or computer)
+  names trump, the table shows who called it, the contract
   ("Pearl calls it: 4 Downtown in Hearts") and what it takes to make or set
   it — for about 2½ seconds before the first card (a tap skips it; your own
   call gets a short confirmation).
@@ -179,12 +179,13 @@ makes **13 books** per hand.
   **No-Trump** ("four no"). A bid promises *six plus the bid* books: bid 4
   means 10 books. A four is a four: to beat it, bid five, or four No-Trump.
   If the first three players pass, the dealer is stuck with a minimum bid.
-- **The kitty.** Whoever bids highest takes all six kitty cards, *then* names
-  trump and picks **Uptown** (high cards win) or **Downtown** (A, 2, 3 … K —
-  after the ace, low wins); a No-Trump winner just picks the direction. Then
-  they bury six — and the buried book counts as the bidding team's first book.
-  You're bidding on your hand alone, guessing at the kitty and what the others
-  hold.
+- **Trump, then the kitty.** Whoever bids highest names trump and picks
+  **Uptown** (high cards win) or **Downtown** (A, 2, 3 … K — after the ace,
+  low wins) from their own 12 cards, *before* seeing the kitty; a No-Trump
+  winner just picks the direction. Then they take all six kitty cards and bury
+  six — and the buried book counts as the bidding team's first book. You're
+  bidding and calling on your hand alone, guessing at the kitty and what the
+  others hold.
 - **The play.** The bidder leads. Follow suit if you can. The Big and Little
   Jokers are the top two trumps. In No-Trump the jokers are throw-offs: they
   can never win a book, can't be led (unless they're all you have left), and

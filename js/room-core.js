@@ -390,9 +390,8 @@
         return {};
       }
       events.push({ t: 'auction', highSeat: this.highSeat, bid: this.high });
-      // Highest bid gets the kitty right away; trump and direction get named
-      // with all of it in hand.
-      this._takeKitty(this.highSeat, events);
+      // The high bidder names trump and Uptown/Downtown (No-Trump: just the
+      // direction) BEFORE seeing the kitty, then picks it up and buries.
       this.phase = 'declare';
       this.turn = this.highSeat;
       this.need = this.high.type === 'notrump' ? 'declare-dir' : 'declare-suit';
@@ -423,6 +422,7 @@
       const type = this.high.type === 'notrump' ? 'notrump' : direction;
       this.contract = { amount: this.high.amount, type, trump, direction };
       events.push({ t: 'declare', seat, contract: this.contract });
+      this._takeKitty(seat, events); // the call is made — now the kitty
       this.phase = 'discard';
       this.turn = this.highSeat;
       this.need = 'discard';
@@ -721,7 +721,7 @@
         if (!r.bid.pass) this.plans[seat] = r.plan;
         this._applyBid(seat, r.bid, events);
       } else if (this.need === 'declare-suit' || this.need === 'declare-dir') {
-        // With the kitty in hand: best trump + direction (or NT direction).
+        // From its own 12 cards (the kitty comes after): best trump + direction.
         const d = aiLib.chooseDeclare(this.hands[seat], this.high.type === 'notrump' ? 'notrump' : 'suit');
         this._applyDeclare(seat, d, events);
       } else if (this.need === 'discard') {

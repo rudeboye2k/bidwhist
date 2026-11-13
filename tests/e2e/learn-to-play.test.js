@@ -62,8 +62,8 @@ async function runLesson(b, label, opts, finishForMe) {
     await p.waitForTimeout(150);
   }
   check(`${label}${finishForMe ? ' (finish for me)' : ''}: the lesson runs start to finish`, done);
-  const want = ['Welcome to the table', 'How you win', 'How this lesson works', 'Your 12 cards', 'Your bid', 'You won it — give me da kitty!',
-    'Pick Spades — and Uptown', 'Everyone knows the deal now', 'Bury six cards', 'You lead the first book'];
+  const want = ['Welcome to the table', 'How you win', 'How this lesson works', 'Your 12 cards', 'Your bid',
+    'Pick Spades — and Uptown', 'Everyone knows the deal now', 'You won it — give me da kitty!', 'Bury six cards', 'You lead the first book'];
   check(`${label}: lessons come in teaching order`, want.every((w, i) => titles[i] === w));
   check(`${label}: covers follow suit, trumping, a joker, partner and scoring`,
     ['Follow suit', 'Out of the suit? Trump it!', 'Let your partner have it', 'You made it!'].every((w) => titles.includes(w) || finishForMe) &&

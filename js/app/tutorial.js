@@ -12,8 +12,9 @@
 // Coach option uses, so the lesson always matches the cards on the table.
 // Lesson 2 (No-Trump & Downtown) is a second fixed deal: everyone passes, you
 // (the dealer) must bid, and a fistful of low cards makes 3 No-Trump Downtown.
+// (In both, trump/direction is called from your own 12 cards, then the kitty.)
 const TUTORIAL_SEED = 1789;
-const LESSON2_SEED = 9255;
+const LESSON2_SEED = 35156;
 const T = { on: false, lesson: 1, seen: {}, auto: false, bid: null, decl: null, play: null, wonBid: false, books: 0 };
 const L2 = () => T.lesson === 2;
 
@@ -184,7 +185,7 @@ async function tutorialTurn(view) {
       const pts = T.bid ? T.bid.amount : 3;
       await lesson('The auction', 'Everyone passed — and you&rsquo;re the dealer',
         `<p>${said.length ? said.join(', ') + '. ' : ''}When the first three players pass, the <b>dealer must bid</b> (that&rsquo;s a table rule you can switch off).</p>` +
-        `<p>No suit here is strong enough for trump — but all those low cards are. Bid <b>${pts} No-Trump</b>: you&rsquo;ll get the kitty, then call it <b>Downtown</b>. ` +
+        `<p>No suit here is strong enough for trump — but all those low cards are. Bid <b>${pts} No-Trump</b>: you&rsquo;ll call it <b>Downtown</b>, then pick up the kitty. ` +
         `Make it and it scores double.</p>`,
         [{ label: 'Got it', value: 'ok', primary: true }]);
       return;
@@ -194,8 +195,8 @@ async function tutorialTurn(view) {
       `Bid <b>4</b> means <b>10</b> of the 13 books (the kitty counts as one). You can also add <b>No-Trump</b>, but let&rsquo;s keep it simple.</p>` +
       (said.length ? `<p>So far: ${said.join(', ')}.</p>` : '') +
       (G.high && G.highSeat === (G.viewSeat + 2) % 4
-        ? `<p>Yes — that 3 is your own partner&rsquo;s bid. You&rsquo;re allowed to outbid your partner, and you should when your hand is the stronger one: then <i>you</i> get the kitty and name trump.</p>` : '') +
-      `<p>A four beats a three. With ${f.jokers ? 'a joker, ' : ''}${f.n} ${E.SUIT_NAMES[f.longest]}${f.aces ? ` and ${f.aces} ace${f.aces > 1 ? 's' : ''}` : ''}, you can take plenty of books — so <b>bid ${T.bid ? T.bid.amount : 4}</b> and win the kitty.</p>`,
+        ? `<p>Yes — that 3 is your own partner&rsquo;s bid. You&rsquo;re allowed to outbid your partner, and you should when your hand is the stronger one: then <i>you</i> name trump and get the kitty.</p>` : '') +
+      `<p>A four beats a three. With ${f.jokers ? 'a joker, ' : ''}${f.n} ${E.SUIT_NAMES[f.longest]}${f.aces ? ` and ${f.aces} ace${f.aces > 1 ? 's' : ''}` : ''}, you can take plenty of books — so <b>bid ${T.bid ? T.bid.amount : 4}</b> and win the auction.</p>`,
       [{ label: 'Got it', value: 'ok', primary: true }]);
   } else if ((view.need === 'declare-suit' || view.need === 'declare-dir') && !T.seen.decl) {
     T.seen.decl = true;
@@ -205,16 +206,16 @@ async function tutorialTurn(view) {
       const low = myHand().filter((c) => !c.joker && (c.rank <= 5 || c.rank === 14)).length;
       await lesson('The call', down ? 'Call it Downtown' : 'Call it Uptown',
         `<p>In No-Trump there&rsquo;s no suit to name — you only pick the <b>direction</b>.</p>` +
-        (down ? `<p>With the kitty you hold <b>${low} cards from ace to five</b>. Downtown, those are your winners — so call <b>Downtown</b>.</p>`
+        (down ? `<p>You hold <b>${low} cards from ace to five</b>. Downtown, those are your winners — so call <b>Downtown</b>.</p>`
           : `<p>Your high cards are your winners here — so call <b>Uptown</b>.</p>`),
         [{ label: 'Got it', value: 'ok', primary: true }]);
       return;
     }
     const n = myHand().filter((c) => c.suit === d.trump || c.joker).length;
     await lesson('Naming trump', d.trump ? `Pick ${E.SUIT_NAMES[d.trump]} — and Uptown` : 'Pick a direction',
-      `<p><b>Trump</b> is the boss suit: any trump card beats every card of the other suits. Since you won the bid, <i>you</i> choose it — after seeing the kitty.</p>` +
+      `<p><b>Trump</b> is the boss suit: any trump card beats every card of the other suits. Since you won the bid, <i>you</i> choose it — from your own 12 cards, <b>before</b> you see the kitty.</p>` +
       `<p>You also pick the <b>direction</b>: <b>Uptown</b> means high cards win (A, K, Q…), <b>Downtown</b> means low cards win (A, 2, 3…).</p>` +
-      (d.trump ? `<p>With the kitty you hold <b>${n} trumps</b> if you call ${E.SUIT_NAMES[d.trump]} (the jokers are trumps too), and they&rsquo;re high cards — so call <b>${suitWord(d.trump)}, ${d.direction === 'uptown' ? 'Uptown' : 'Downtown'}</b>.</p>` : ''),
+      (d.trump ? `<p>You hold <b>${n} trumps</b> if you call ${E.SUIT_NAMES[d.trump]} (the jokers are trumps too), and they&rsquo;re high cards — so call <b>${suitWord(d.trump)}, ${d.direction === 'uptown' ? 'Uptown' : 'Downtown'}</b>.</p>` : ''),
       [{ label: 'Got it', value: 'ok', primary: true }]);
   } else if (view.need === 'discard' && !T.seen.discard) {
     T.seen.discard = true;
@@ -272,10 +273,9 @@ async function tutorialTurn(view) {
 }
 
 async function tutorialKitty() {
-  await lesson('The auction', 'You won it — give me da kitty!',
-    `<p>Highest bid takes the kitty. Those six cards are going into your hand now, so you&rsquo;ll have <b>18</b> to choose from.</p>` +
-    (L2() ? `<p>That&rsquo;s the prize for winning the bid: you see the extra cards <i>before</i> you pick the direction.</p>`
-      : `<p>That&rsquo;s the prize for winning the bid: you see the extra cards <i>before</i> you decide what trump is.</p>`));
+  await lesson('The kitty', 'You won it — give me da kitty!',
+    `<p>Your call is made, so now the kitty is yours: those six cards go into your hand, and you&rsquo;ll have <b>18</b> to choose from.</p>` +
+    `<p>That&rsquo;s the gamble of winning the bid — you name ${L2() ? 'the direction' : 'trump'} <i>before</i> you see the extra cards. Next you bury the six you need least.</p>`);
 }
 async function tutorialCalled(c) {
   if (T.seen.called) return;
@@ -343,7 +343,7 @@ async function tutorialScore(r) {
   }
   const end = await lesson('That&rsquo;s Bid Whist!', 'You&rsquo;re ready to play',
     `<ol class="lesson-recap"><li><b>Bid</b> a number (books over six) — highest bid wins the kitty.</li>` +
-    `<li><b>Name trump</b> and Uptown or Downtown, then <b>bury six</b>.</li>` +
+    `<li><b>Name trump</b> and Uptown or Downtown, <i>then</i> take the kitty and <b>bury six</b>.</li>` +
     `<li><b>Follow suit</b> if you can; if you can&rsquo;t, <b>trump</b> it or throw off.</li>` +
     `<li>Make your bid to score every book over six. First to 7 wins.</li></ol>` +
     `<p>Tip: turn on <b>Coach</b> in Table Rules and it&rsquo;ll keep suggesting moves while you play.</p>`,

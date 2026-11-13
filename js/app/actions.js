@@ -10,7 +10,7 @@ function actionHint(text) {
 }
 
 // Bidding: just the number — or the number + No-Trump. Whoever bids highest
-// takes the kitty, THEN names trump and Uptown/Downtown. A four is a four:
+// names trump and Uptown/Downtown from their own 12 cards, THEN takes the kitty. A four is a four:
 // to beat it, bid five, or four No-Trump.
 function showBidPanel(mustBid) {
   const bar = $('action-bar');
@@ -81,16 +81,16 @@ function bidExplain(a) {
   const R = G.rules;
   return `<b>${a}</b>: your team needs <b>${6 + a}</b> of 13 books` +
     (R.kittyIsBook ? ' (the kitty counts as one)' : '') +
-    `. Win the bid, take the kitty, then name trump and Uptown or Downtown. ` +
+    `. Win the bid, name trump and Uptown or Downtown, then take the kitty. ` +
     `<b>${a} No-Trump</b> beats a ${a}` + (R.noTrumpDoubles ? ' and scores double' : '') +
     `. They set you with <b>${8 - a}</b>.`;
 }
 
-// You won the bid and the kitty's in your hand: pick the trump suit AND
-// the direction, then confirm.
+// You won the bid: pick the trump suit AND the direction from your own 12
+// cards, then confirm — the kitty comes after.
 function showDeclareSuit() {
   const bar = $('action-bar');
-  bar.innerHTML = '<div class="action-hint declare-hint">You won it — the kitty&rsquo;s in your hand. Name trump and pick a direction:</div>';
+  bar.innerHTML = '<div class="action-hint declare-hint">You won the bid. Name trump and pick a direction &mdash; then the kitty&rsquo;s yours:</div>';
   const sel = { trump: null, direction: null };
   const hand = G.hands[G.viewSeat].filter((c) => !c.back);
   const suitRow = document.createElement('div'); suitRow.className = 'bid-group';
@@ -131,7 +131,7 @@ function showDeclareSuit() {
 
 function showDeclareDirection() {
   const bar = $('action-bar');
-  bar.innerHTML = '<div class="action-hint">You won it in No-Trump — the kitty&rsquo;s in your hand. Which way does it run?</div>';
+  bar.innerHTML = '<div class="action-hint">You won it in No-Trump. Which way does it run? Then the kitty&rsquo;s yours.</div>';
   const row = document.createElement('div'); row.className = 'bid-group';
   for (const [d, label] of [['uptown', 'Uptown (high wins)'], ['downtown', 'Downtown (low wins)']]) {
     const b = document.createElement('button');

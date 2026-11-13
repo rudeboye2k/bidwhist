@@ -387,16 +387,18 @@ check('rooms have distinct codes', r1.code !== r2.code);
     }
     if (r.phase !== 'declare' || r.highSeat !== 0) continue;
     tested = true;
-    check('auction closes straight into the kitty pickup', lastEvents.some((e) => e.t === 'kitty' && e.seat === 0) && !lastEvents.some((e) => e.t === 'declare'));
+    check('auction closes into naming trump — the kitty stays down', !lastEvents.some((e) => e.t === 'kitty') && !lastEvents.some((e) => e.t === 'declare'));
     check('a bid with a direction attached is stored as just the number', r.high.type === 'suit');
-    check('high bidder already holds the kitty before naming trump (18 cards)', r.hands[0].length === 18 && r.kitty === null);
+    check('high bidder names trump from 12 cards, before seeing the kitty', r.hands[0].length === 12 && r.kitty && r.kitty.length === 6);
+    check("the kitty isn't in the bidder's view yet", r.viewFor(a.token).you.hand.length === 12);
     check('naming trump without Uptown/Downtown is refused', r.submit(a.token, { type: 'declare', trump: 'H' }).error === 'bad-dir');
     const out = r.submit(a.token, { type: 'declare', trump: 'H', direction: 'downtown' });
-    check('trump + direction named after the kitty', !out.error && r.contract.trump === 'H' && r.contract.type === 'downtown' && r.contract.direction === 'downtown');
+    check('trump + direction named, then the kitty is picked up', !out.error && r.contract.trump === 'H' && r.contract.type === 'downtown' && r.contract.direction === 'downtown'
+      && out.events.findIndex((e) => e.t === 'declare') < out.events.findIndex((e) => e.t === 'kitty') && r.hands[0].length === 18 && r.kitty === null);
     check('then bury', r.need === 'discard' && r.phase === 'discard');
   }
   check('found a deal where Ann wins the bid', tested);
-  // bots declare after seeing the kitty too
+  // bots name trump before seeing the kitty too
   const r2 = new Room('BOTDECL', {}, { rng: seeded(32) });
   const h2 = r2.join('Hal');
   const evs = [];
@@ -411,7 +413,7 @@ check('rooms have distinct codes', r1.code !== r2.code);
   }
   const decl = evs.find((e) => e.t === 'declare');
   const ki = evs.findIndex((e) => e.t === 'kitty'), di = evs.findIndex((e) => e.t === 'declare');
-  check('bots: kitty is picked up before trump is named', decl && ki >= 0 && ki < di);
+  check('bots: trump is named before the kitty is picked up', decl && ki >= 0 && di < ki);
   check('bots name a real direction', decl && ['uptown', 'downtown', 'notrump'].includes(decl.contract.type) && decl.contract.direction);
 }
 
