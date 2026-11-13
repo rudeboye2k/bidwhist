@@ -14,7 +14,7 @@
 // (the dealer) must bid, and a fistful of low cards makes 3 No-Trump Downtown.
 // (In both, trump/direction is called from your own 12 cards, then the kitty.)
 const TUTORIAL_SEED = 1789;
-const LESSON2_SEED = 35156;
+const LESSON2_SEED = 29802;
 const T = { on: false, lesson: 1, seen: {}, auto: false, bid: null, decl: null, play: null, wonBid: false, books: 0 };
 const L2 = () => T.lesson === 2;
 
