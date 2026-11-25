@@ -22,6 +22,7 @@ function startSolo(opts) {
   opts = opts || {};
   if (!opts.tutorial) T.on = false;
   G.daily = opts.daily || null;
+  closeBoston();
   const rules = opts.rules || E.cleanRules(G.nextRules || G.rules);
   // The Daily Deal is the day's fixed deal with default rules and fresh bots.
   const room = opts.daily ? RoomCore.dailyRoom(opts.daily)
@@ -175,7 +176,7 @@ function serverOrError() {
 function setOnlineError(msg) { $('online-error').textContent = msg || ''; }
 
 function connectRoom(base, code, isHost) {
-  G.daily = null;
+  G.daily = null; closeBoston();
   Object.assign(Online, { base, code, isHost, queue: [], draining: false, started: false, local: false, watching: false });
   let saved = null;
   try { saved = localStorage.getItem(tokenKey(code)); } catch (_) { /* ignore */ }
@@ -248,6 +249,8 @@ async function animateEvents(events) {
   for (const ev of events) {
     switch (ev.t) {
       case 'deal':
+        // A Boston on screen stays until you tap (online: at most 20s).
+        if (Boston.open) { offerBostonContinue(); await waitForBoston(20000); closeBoston(); }
         G.bids = [null, null, null, null];
         G.handResult = null; Online.summaryFor = null;
         G.dealer = ev.dealer; G.handNo = ev.handNo;
@@ -377,6 +380,8 @@ async function animateEvents(events) {
         break;
       case 'gameover':
         if (Online.local) noteSoloGame(ev.winner === myTeam());
+        // A game-winning Boston gets its moment before the final score covers it.
+        if (Boston.open) { offerBostonContinue('See the Final Score'); await waitForBoston(); }
         showOnlineGameover(ev.winner, ev.scores);
         await wait(200);
         break;
@@ -708,7 +713,32 @@ function showOnlineSummary(r) {
   $('btn-review-hand').hidden = !(r.tricks && r.tricks.length) || T.on;
   const wasOpen = $('modal-summary').classList.contains('show');
   $('modal-summary').classList.add('show');
-  if (!wasOpen) celebrate('modal-summary', !r.made ? 'set' : r.boston ? 'boston' : 'made', bidTeam === myTeam());
+  if (!wasOpen) {
+    if (r.boston) Boston.open = true;
+    celebrate('modal-summary', !r.made ? 'set' : r.boston ? 'boston' : 'made', bidTeam === myTeam());
+  }
+}
+
+// ---- a Boston stays up ---------------------------------------------------------
+// All 13 books deserves a screenshot: the Boston summary doesn't get covered by
+// the game-over screen or swept away by the next deal until you tap Continue.
+// (Online, if the host has already dealt, it gives way after 20 seconds.)
+const Boston = { open: false, waiters: [] };
+function closeBoston() {
+  Boston.open = false;
+  delete $('btn-next-hand').dataset.continue;
+  Boston.waiters.splice(0).forEach((done) => done());
+}
+function waitForBoston(ms) {
+  if (!Boston.open) return Promise.resolve();
+  return new Promise((done) => { Boston.waiters.push(done); if (ms) setTimeout(done, ms); });
+}
+// The next thing is waiting behind the Boston: the summary button becomes Continue.
+function offerBostonContinue(label) {
+  const btn = $('btn-next-hand');
+  btn.textContent = label || 'Continue';
+  btn.disabled = false;
+  btn.dataset.continue = '1';
 }
 
 function showOnlineGameover(winner, scores) {

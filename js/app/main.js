@@ -15,6 +15,9 @@ function flushRules() {
 }
 $('btn-next-hand').addEventListener('click', () => {
   $('modal-summary').classList.remove('show');
+  const justContinue = !!$('btn-next-hand').dataset.continue; // a Boston was holding the next screen
+  closeBoston();
+  if (justContinue) return;
   if (G.daily) { openDaily(); return; }
   if (Online.conn && amHost()) { flushRules(); Online.conn.send({ type: 'nextHand' }); }
 });
