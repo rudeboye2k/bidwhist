@@ -152,6 +152,14 @@ const STORAGE_KEY = 'bidwhist.rules';
 function loadRules() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    // The computers got tougher and Sharp became the default: tables saved on
+    // the old default (Regular) move up once. Easy stays Easy, and anyone can
+    // pick Regular again in Table Rules.
+    if (saved && saved.aiLevel === 'regular' && !localStorage.getItem('bidwhist.sharpDefault')) {
+      saved.aiLevel = 'sharp';
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    }
+    localStorage.setItem('bidwhist.sharpDefault', '1');
     return E.cleanRules({ ...E.DEFAULT_RULES, ...(saved || {}) });
   } catch (_) { return { ...E.DEFAULT_RULES }; }
 }

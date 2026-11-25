@@ -15,6 +15,8 @@
 // (In both, trump/direction is called from your own 12 cards, then the kitty.)
 const TUTORIAL_SEED = 1789;
 const LESSON2_SEED = 29802;
+// The lessons' deals were chosen with 'regular' computer players: keep them so.
+const LESSON_RULES = E.cleanRules(Object.assign({}, E.DEFAULT_RULES, { aiLevel: 'regular' }));
 const T = { on: false, lesson: 1, seen: {}, auto: false, bid: null, decl: null, play: null, wonBid: false, books: 0 };
 const L2 = () => T.lesson === 2;
 
@@ -72,7 +74,7 @@ async function startTutorial(n) {
     '<p>When it&rsquo;s your turn, <b>only the right move is lit up</b> — tap it and I&rsquo;ll tell you why it&rsquo;s right. You can leave any time with <i>Exit lesson</i>.</p>',
     [{ label: 'Deal the cards', value: 'go', primary: true }]);
   if (c === 'exit') return;
-  startSolo({ seed: TUTORIAL_SEED, rules: E.cleanRules(E.DEFAULT_RULES), tutorial: true });
+  startSolo({ seed: TUTORIAL_SEED, rules: LESSON_RULES, tutorial: true });
 }
 
 async function startLesson2() {
@@ -86,7 +88,7 @@ async function startLesson2() {
     '<p>A hand full of little cards is junk Uptown, but Downtown it&rsquo;s a winner. Let&rsquo;s play one.</p>',
     [{ label: 'Deal the cards', value: 'go', primary: true }]);
   if (b === 'exit') return;
-  startSolo({ seed: LESSON2_SEED, rules: E.cleanRules(E.DEFAULT_RULES), tutorial: true });
+  startSolo({ seed: LESSON2_SEED, rules: LESSON_RULES, tutorial: true });
 }
 
 const suitWord = (s) => `${E.SUIT_GLYPHS[s]} ${E.SUIT_NAMES[s]}`;

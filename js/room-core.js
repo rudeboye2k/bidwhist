@@ -725,7 +725,7 @@
         const d = aiLib.chooseDeclare(this.hands[seat], this.high.type === 'notrump' ? 'notrump' : 'suit');
         this._applyDeclare(seat, d, events);
       } else if (this.need === 'discard') {
-        const discards = aiLib.chooseDiscards(this.hands[seat], this.contract);
+        const discards = aiLib.chooseDiscards(this.hands[seat], this.contract, this.rules.aiLevel);
         this._applyDiscard(seat, discards.map((c) => c.id), events);
       } else if (this.need === 'play') {
         const card = aiLib.choosePlay(this.hands[seat], this.trick, this.contract, seat, this.memory, level, this.rng);

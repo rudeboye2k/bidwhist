@@ -9,6 +9,11 @@
 })(typeof self !== 'undefined' ? self : this, function (Engine) {
   'use strict';
 
+  // How much bolder a 'sharp' computer bids than a 'regular' one. Measured in
+  // tests/levels.js: 0.7 (with void-burying) wins ~62% of auctions and still
+  // makes ~76% of its bids; bolder adds little and gets set more.
+  const SHARP_BID_BIAS = 0.7;
+
   // ---- hand evaluation ------------------------------------------------------
 
   function bySuit(hand) {
@@ -155,7 +160,8 @@
     void seat;
     // Easy computers misjudge their hands more (wider noise, a touch timid).
     const easy = rules && rules.aiLevel === 'easy';
-    const plan = bestPlan(hand, (learner ? learner.bidBias : 0) + (easy ? -0.4 : 0));
+    const sharpBid = rules && rules.aiLevel === 'sharp';
+    const plan = bestPlan(hand, (learner ? learner.bidBias : 0) + (easy ? -0.4 : 0) + (sharpBid ? SHARP_BID_BIAS : 0));
     const noise = (rng() - 0.5) * (easy ? 2.4 : 0.8);
     let maxAmount = Math.floor(plan.teamBooks + noise) - 6;
     maxAmount = Math.min(7, maxAmount);
@@ -206,7 +212,9 @@
   // ---- kitty discard --------------------------------------------------------
 
   // From 18 cards keep the best 12 for the contract; return the 6 discards.
-  function chooseDiscards(hand, contract) {
+  function chooseDiscards(hand, contract, level) {
+    // Sharp bidders bury short side suits to make voids they can trump into.
+    if (level === 'sharp' && contract.type !== 'notrump') return buryForVoids(hand, contract);
     const keepValue = (c) => {
       if (c.joker) return contract.type === 'notrump' ? -1 : 2000;
       const dir = contract.type === 'notrump' ? contract.direction : contract.type;
@@ -216,6 +224,27 @@
     };
     // Keep 12; bury the rest (6 with jokers in the deck, 4 without).
     return hand.slice().sort((a, b) => keepValue(a) - keepValue(b)).slice(0, Math.max(0, hand.length - 12));
+  }
+
+  // Trump contracts: bury whole short side suits (keeping aces/bosses) so the
+  // bidder can trump in early, then the weakest of what's left.
+  function buryForVoids(hand, contract) {
+    const need = Math.max(0, hand.length - 12);
+    const dir = contract.type;
+    const isTrump = (c) => c.joker || c.suit === contract.trump;
+    const top = (c) => Engine.rankPower(c.rank, dir) >= Engine.rankPower(dir === 'downtown' ? 2 : 13, dir); // A,K (up) / A,2 (down)
+    const out = [];
+    const side = ['S', 'H', 'D', 'C'].filter((s) => s !== contract.trump)
+      .map((s) => hand.filter((c) => c.suit === s && !c.joker))
+      .filter((cs) => cs.length && !cs.some(top))
+      .sort((a, b) => a.length - b.length);
+    for (const cs of side) if (out.length + cs.length <= need) out.push(...cs);
+    const rest = hand.filter((c) => !out.includes(c) && !isTrump(c))
+      .sort((a, b) => Engine.rankPower(a.rank, dir) - Engine.rankPower(b.rank, dir));
+    while (out.length < need && rest.length) out.push(rest.shift());
+    const tr = hand.filter((c) => !out.includes(c) && isTrump(c)).sort((a, b) => (a.joker ? 1000 : Engine.rankPower(a.rank, dir)) - (b.joker ? 1000 : Engine.rankPower(b.rank, dir)));
+    while (out.length < need && tr.length) out.push(tr.shift());
+    return out;
   }
 
   // ---- trick play -----------------------------------------------------------
@@ -228,10 +257,12 @@
   // memory = Set of card ids already played this hand (shared, updated by app).
   // Returns the card to play. `seat` is this AI's seat; partner = (seat+2)%4.
   // `level` (optional): 'easy' plays a loose card about a third of the time;
-  // 'sharp' draws trump: holding 4+ trumps while opponents may still have
-  // some, it leads its top trump. Worth ~+0.1 pt/hand over 'regular' in a
-  // paired simulation (tests/levels.js). Second-hand-low and void-building
-  // discards were tried too and measured slightly negative, so they're out.
+  // 'sharp' draws trump (holding 4+ trumps while opponents may still have
+  // some, it leads its top trump) and won't overtake a partner who already
+  // holds the best card left. With its bolder bidding and void-burying, sharp
+  // is worth ~+0.6 pt/hand over 'regular' in a paired simulation
+  // (tests/levels.js). Second-hand-low and void-building discards in play
+  // measured negative, and drawing trump with 3 or 5+ was worse than 4.
   function choosePlay(hand, trick, contract, seat, memory, level, rng) {
     const legal = Engine.legalPlays(hand, trick, contract);
     if (legal.length === 1) return legal[0];
@@ -297,6 +328,10 @@
 
     if (partnerWinning) {
       // Partner has it: only overtake if partner's card is weak and we are last.
+      const pc = trick.find((p) => p.player === (seat + 2) % 4);
+      // Sharp: partner holds the best card left in the suit — don't waste a high one.
+      if (sharp && pc && winnerPower < 500 && isBoss(pc.card))
+        return legal.sort((a, b) => power(a) - power(b))[0];
       if (lastToPlay || winnerPower >= 500 || (led && winnerPower >= Engine.rankPower(dir === 'downtown' ? 3 : 12, dir)))
         return legal.sort((a, b) => power(a) - power(b))[0];
     }

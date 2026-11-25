@@ -1,4 +1,4 @@
-// AI level check: does 'sharp' beat 'regular', and does 'easy' lose to it?
+// AI level check: does 'sharp' clearly beat 'regular', and does 'easy' lose to it?
 // Paired: every seeded deal is played twice with the two levels swapping
 // teams, so deal luck cancels and only the level difference remains.
 // Run: node tests/levels.js [hands]
@@ -34,10 +34,10 @@ function playHand(seed, levels) {
     if (!bid.pass) { bid._seat = seat; high = bid; hs = seat; hp = plan; }
   }
   void hp;
-  const bh = d[hs].concat(kitty); // kitty first, then trump + direction
-  const decl = AI.chooseDeclare(bh, high.type);
+  const decl = AI.chooseDeclare(d[hs], high.type); // trump + direction from 12 cards…
+  const bh = d[hs].concat(kitty);                    // …then the kitty
   const contract = { amount: high.amount, type: high.type === 'notrump' ? 'notrump' : decl.direction, trump: decl.trump, direction: decl.direction };
-  const ds = new Set(AI.chooseDiscards(bh, contract).map((c) => c.id));
+  const ds = new Set(AI.chooseDiscards(bh, contract, levels[hs % 2]).map((c) => c.id));
   d[hs] = bh.filter((c) => !ds.has(c.id));
   const memory = new Set();
   const books = [0, 0];
@@ -80,8 +80,9 @@ const f = (r) => `${r.mean >= 0 ? '+' : ''}${r.mean.toFixed(3)} pts/hand (±${(2
 console.log(`sharp vs regular: ${f(s)}`);
 console.log(`easy  vs regular: ${f(e)}`);
 let ok = true;
-if (!(s.mean - 2 * s.se > 0)) { console.log('FAIL: sharp is not reliably better than regular'); ok = false; }
-else console.log('PASS: sharp beats regular');
+// Sharp is the default "hard" game: it must beat regular by a clear margin.
+if (!(s.mean - 2 * s.se > 0.3)) { console.log('FAIL: sharp is not clearly (≥0.3 pts/hand) better than regular'); ok = false; }
+else console.log('PASS: sharp beats regular by a clear margin');
 if (!(e.mean + 2 * e.se < 0)) { console.log('FAIL: easy is not reliably weaker than regular'); ok = false; }
 else console.log('PASS: easy loses to regular');
 process.exit(ok ? 0 : 1);

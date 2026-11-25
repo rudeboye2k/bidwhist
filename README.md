@@ -126,9 +126,13 @@ protocol are in [`server/README.md`](server/README.md). Opened as a local file
 
 The computer comes in three levels (Table Rules → Computer players): **Easy**
 misjudges hands and plays loose (≈0.8 pt/hand worse than Regular), **Regular**
-is the tuned default, and **Sharp** draws trump when it holds four or more
-(≈+0.1 pt/hand over Regular). Both edges are measured by a paired simulation,
-`tests/levels.js`, that replays the same deals with the teams swapped.
+plays it straight, and **Sharp** — the default — bids bolder (it wins ~62% of
+auctions against Regular and still makes ~76% of them), buries short side
+suits so it can trump in, draws trump when it holds four or more, and won't
+waste a high card when its partner already holds the best one left
+(≈+0.6 pt/hand over Regular). Both edges are measured by a paired simulation,
+`tests/levels.js`, that replays the same deals with the teams swapped. The
+Learn to Play lessons always use Regular, so their fixed deals play out as written.
 
 In solo play the table also adapts across a session (`js/ai.js`). It isn't a neural
 net — under Bid Whist's scoring the honest truth is that a made contract already
@@ -214,7 +218,7 @@ a constant. In-game **Table Rules** lets you change (persisted in the browser):
 | No-Trump bids start at 4 | off |
 | First lead: the high bidder, or left of the dealer | bidder |
 | Renege can be called (follow-suit not enforced; 3 books to the callers) | off |
-| Computer players: Easy / Regular / Sharp | Regular |
+| Computer players: Easy / Regular / Sharp | Sharp |
 | Turn timer online (a bot moves for an idle player) | off |
 
 Online, the **host** sets the rules for the table (between hands); everyone

@@ -32,7 +32,7 @@
     ntMinFour: false,     // a No-Trump bid must be at least 4
     leadRule: 'bidder',   // who leads the first book: 'bidder' or 'left' (of the dealer)
     renege: false,        // follow-suit isn't enforced; a renege can be called (3-book penalty)
-    aiLevel: 'regular',   // computer players: 'easy' | 'regular' | 'sharp'
+    aiLevel: 'sharp',     // computer players: 'easy' | 'regular' | 'sharp' (the default)
     turnTimer: 0,         // online: seconds before a bot plays an idle player's turn (0 = off)
   };
 
@@ -77,7 +77,7 @@
     for (const k of ['noTrumpDoubles', 'kittyIsBook', 'forcedDealerBid', 'sportKitty', 'bostonDoubles', 'noJokers', 'ntMinFour', 'renege'])
       o[k] = typeof r[k] === 'boolean' ? r[k] : d[k];
     o.leadRule = r.leadRule === 'left' ? 'left' : 'bidder';
-    o.aiLevel = ['easy', 'regular', 'sharp'].includes(r.aiLevel) ? r.aiLevel : 'regular';
+    o.aiLevel = ['easy', 'regular', 'sharp'].includes(r.aiLevel) ? r.aiLevel : 'sharp';
     o.turnTimer = [0, 20, 30, 45, 60].includes(r.turnTimer) ? r.turnTimer : 0;
     return o;
   }
