@@ -584,8 +584,6 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
 /* ---------- phones (portrait) ---------- */
 @media (max-width: 600px) {
   :root { --card-w: 50px; --card-h: 72px; }
-  /* Your own hand is bigger than the rest of the table: it's what you tap. */
-  .seat-south .hand { --card-w: 62px; --card-h: 88px; }
   .room { padding: 0 max(10px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
 
   .topbar { align-items: center; gap: 10px; padding: max(10px, env(safe-area-inset-top)) 2px 8px; flex-wrap: nowrap; }
@@ -682,7 +680,6 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
 /* ---------- phones held sideways (short landscape) ---------- */
 @media (orientation: landscape) and (max-height: 500px) {
   :root { --card-w: 46px; --card-h: 66px; }
-  .seat-south .hand { --card-w: 54px; --card-h: 76px; }
   .room { padding: 0 max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
   .topbar { align-items: center; gap: 10px; padding: 6px 2px 4px; flex-wrap: nowrap; }
   .brand { font-size: 20px; flex: 1; white-space: nowrap; }
