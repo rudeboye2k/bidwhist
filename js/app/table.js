@@ -553,9 +553,10 @@ function renderHand() {
 }
 
 // Fan the hand to fit whatever width this screen has. Cards overlap just
-// enough to fit; if that would leave less than a comfortable tap target
-// (e.g. 18 cards after picking up the kitty on a phone), split into two
-// overlapping rows instead.
+// enough to fit; if that would leave less than a finger-sized strip of each
+// card to tap (a 12-card hand on most phones, or 18 after the kitty), split
+// into two overlapping rows instead.
+function landscapePhone() { return window.matchMedia('(orientation: landscape) and (max-height: 500px)').matches; }
 function layoutHand() {
   const box = $('hand');
   box.querySelectorAll('.hand-break').forEach((b) => b.remove());
@@ -565,11 +566,13 @@ function layoutHand() {
   const cw = cards[0].getBoundingClientRect().width || cards[0].offsetWidth || 74;
   const cs = getComputedStyle(box);
   const avail = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  const maxStep = cw * 0.7, MIN_TAP = 21; // px of each card left to tap
+  const maxStep = cw * 0.7, MIN_TAP = 40; // px of each card left to tap (a fingertip)
   // 3px of slack so sub-pixel rounding never wraps the last card onto its own line.
   const stepFor = (n) => (n <= 1 ? cw : Math.min(maxStep, (avail - cw - 3) / (n - 1)));
   let rows = 1;
-  if (stepFor(cards.length) < MIN_TAP && cards.length > 9) rows = 2;
+  // Judge by the room there is, not the 70% cap (wide screens are capped on purpose).
+  const room = (n) => (avail - cw - 3) / Math.max(1, n - 1);
+  if (room(cards.length) < MIN_TAP && cards.length > 6 && !landscapePhone()) rows = 2;
   const perRow = Math.ceil(cards.length / rows);
   const step = stepFor(perRow);
   cards.forEach((el, i) => {
