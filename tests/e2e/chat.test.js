@@ -47,8 +47,10 @@ const check = (n, c) => { if (c) { pass++; console.log('PASS ', n); } else { fai
   // solo
   const s = await b.newPage({ viewport: { width: 1280, height: 860 } });
   await s.goto(ORIGIN + '/'); await s.click('#btn-deal-in'); await wait(1500);
-  await s.click('#btn-react'); await s.fill('.react-say input', 'Pearl, you scared?'); await s.press('.react-say input', 'Enter'); await wait(700);
-  check('solo: typing works against the computer too', (await s.textContent('#log')).includes('Pearl, you scared?'));
+  await s.click('#btn-react'); await s.fill('.react-say input', 'Pearl, you scared?'); await s.press('.react-say input', 'Enter');
+  // It's shown after whatever the table is still animating (bids, the call), so give a slow machine time.
+  const said = await s.waitForFunction(() => document.getElementById('log').textContent.includes('Pearl, you scared?'), null, { timeout: 15000 }).then(() => true).catch(() => false);
+  check('solo: typing works against the computer too', said);
   console.log(`\n${pass}/${pass + fail} passed`);
   await b.close(); process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

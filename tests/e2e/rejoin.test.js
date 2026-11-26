@@ -29,13 +29,17 @@ const check = (n, c) => { if (c) { pass++; console.log('PASS ', n); } else { fai
   // While you were gone a bot played your seat, so the hand may be over:
   // the result comes up, and as host you can deal the next one.
   await p.waitForFunction(() => document.querySelectorAll('#hand .card:not(.back)').length >= 1
-    || document.getElementById('modal-summary').classList.contains('show'), null, { timeout: 20000 });
+    || document.getElementById('modal-summary').classList.contains('show')
+    || document.getElementById('modal-gameover').classList.contains('show'), null, { timeout: 20000 });
   check('back in your own seat', /Rejoiner/.test(await p.textContent('#plate-0')));
   check('still the host', await p.evaluate(() => !!(G.view && G.view.hostToken)));
   if (await p.isVisible('#modal-summary.show')) {
     check('between hands: the result shows with a Deal button', !(await p.isDisabled('#btn-next-hand')));
-    await p.click('#btn-next-hand');
+    await p.click('#btn-next-hand'); // Deal Next Hand — or, after a game-winning Boston, See the Final Score
   }
+  // The bot covering your seat may have finished the whole game (a made 7 does it).
+  await p.waitForTimeout(800);
+  if (await p.isVisible('#modal-gameover.show')) await p.click('#btn-rematch');
   await p.waitForFunction(() => document.querySelectorAll('#hand .card:not(.back)').length >= 12, null, { timeout: 20000 });
   check('playing again with a fresh hand', true);
 
