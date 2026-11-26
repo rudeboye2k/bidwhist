@@ -88,11 +88,15 @@ function confetti(n) {
   if (reduceMotion()) return;
   const box = document.createElement('div');
   box.className = 'confetti'; box.setAttribute('aria-hidden', 'true');
-  const colors = ['#f0cd78', '#d4a94e', '#f6efdd', '#e0705f', '#7fc97f', '#b3382e'];
+  // On a holiday, the confetti comes in its colours, with a few themed pieces mixed in.
+  const hol = typeof holidayConfetti === 'function' ? holidayConfetti() : null;
+  const colors = hol ? hol.colors : ['#f0cd78', '#d4a94e', '#f6efdd', '#e0705f', '#7fc97f', '#b3382e'];
+  const pieces = hol ? hol.pieces : [];
   for (let i = 0; i < (n || 90); i++) {
     const p = document.createElement('i');
     p.style.left = (Math.random() * 100) + '%';
-    p.style.background = colors[i % colors.length];
+    if (pieces.length && i % 5 === 0) { p.className = 'piece'; p.textContent = pieces[i % pieces.length]; }
+    else p.style.background = colors[i % colors.length];
     p.style.setProperty('--dx', (Math.random() * 160 - 80) + 'px');
     p.style.setProperty('--rot', (Math.random() * 900 - 450) + 'deg');
     p.style.animationDuration = (2.2 + Math.random() * 1.8) + 's';

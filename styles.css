@@ -1418,22 +1418,114 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
 }
 
 /* ---------- holiday decorations (js/app/decor.js) ---------- */
+/* Everything here sits beneath the cards and lets taps through. */
+.hol { pointer-events: none; }
 .topbar.holiday { position: relative; }
-.holiday-garland {
-  position: absolute; left: 0; right: 0; bottom: -11px; height: 22px; overflow: hidden;
-  white-space: nowrap; text-align: center; font-size: 14px; line-height: 22px; letter-spacing: 6px;
-  pointer-events: none; z-index: 2; opacity: .9;
-  border-top: 2px solid; border-image: linear-gradient(90deg, transparent, var(--hol-a), var(--hol-b), var(--hol-a), transparent) 1;
+
+/* The strand along the header: bunting or bulbs on a sagging wire. */
+.hol-strand { position: absolute; left: 0; right: 0; bottom: -20px; height: 30px; z-index: 2; }
+.hol-strand::before {
+  content: ""; position: absolute; left: -2%; right: -2%; top: 1px; height: 14px;
+  border-top: 1.5px solid rgba(240, 205, 120, .55); border-radius: 50% / 100% 100% 0 0; transform: scaleY(-1);
 }
+.hol-strand .flag {
+  position: absolute; width: 16px; height: 20px; margin-left: -8px; background: var(--c);
+  clip-path: polygon(0 0, 100% 0, 50% 100%); transform-origin: 50% 0;
+  box-shadow: inset 0 -6px 8px rgba(0, 0, 0, .18); animation: hol-sway 3.2s ease-in-out infinite;
+}
+.hol-strand .bulb {
+  position: absolute; width: 9px; height: 13px; margin-left: -4.5px; border-radius: 50% 50% 45% 45%;
+  background: var(--c); box-shadow: 0 0 10px 3px var(--c); animation: hol-twinkle 2.6s ease-in-out infinite;
+}
+.hol-strand .bulb::before { content: ""; position: absolute; left: 2px; top: -4px; width: 5px; height: 5px; border-radius: 1px; background: #3a3a2e; }
+.hol-strand .ornament { position: absolute; margin-left: -11px; font-size: 20px; line-height: 1; transform-origin: 50% 0; animation: hol-sway 3.8s ease-in-out infinite; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .45)); }
+@keyframes hol-sway { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+@keyframes hol-twinkle { 0%, 100% { opacity: 1; filter: brightness(1.15); } 45% { opacity: .35; filter: brightness(.7); box-shadow: 0 0 3px 0 var(--c); } }
+
+/* Twinkling lights around the table rail. */
+.hol-rail { position: absolute; inset: 0; z-index: 1; }
+.rail-bulb {
+  position: absolute; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%;
+  background: var(--c); box-shadow: 0 0 8px 3px var(--c); animation: hol-twinkle 3s ease-in-out infinite;
+}
+
+/* Ambient effect layers: behind the page, on the felt (under the cards), behind the start screen card. */
+.hol-fx { position: fixed; inset: 0; overflow: hidden; z-index: 0; }
+.hol-fx-felt { position: absolute; inset: 6px; border-radius: 19px; z-index: 0; }
+.hol-fx-splash { position: absolute; z-index: 0; }
+#splash .splash-card { position: relative; z-index: 1; }
+.flake {
+  position: absolute; top: -10px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px rgba(255, 255, 255, .8);
+  animation: hol-fall linear infinite;
+}
+.leaf { position: absolute; top: -40px; line-height: 1; animation: hol-leaf linear infinite; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .35)); }
+@keyframes hol-fall { from { transform: translate(0, -20px); } to { transform: translate(var(--drift), 105vh); } }
+@keyframes hol-leaf {
+  0% { transform: translate(0, -40px) rotate(0); }
+  25% { transform: translate(calc(var(--drift) * .6), 25vh) rotate(calc(var(--spin) * .25)); }
+  50% { transform: translate(calc(var(--drift) * -.3), 52vh) rotate(calc(var(--spin) * .5)); }
+  75% { transform: translate(var(--drift), 78vh) rotate(calc(var(--spin) * .75)); }
+  100% { transform: translate(calc(var(--drift) * .2), 108vh) rotate(var(--spin)); }
+}
+.hol-fx-felt .flake { animation-name: hol-fall-felt; }
+.hol-fx-felt .leaf { animation-name: hol-leaf-felt; }
+@keyframes hol-fall-felt { from { transform: translate(0, -20px); } to { transform: translate(var(--drift), 620px); } }
+@keyframes hol-leaf-felt {
+  0% { transform: translate(0, -40px) rotate(0); }
+  50% { transform: translate(calc(var(--drift) * -.4), 300px) rotate(calc(var(--spin) * .5)); }
+  100% { transform: translate(var(--drift), 640px) rotate(var(--spin)); }
+}
+.twinkle { position: absolute; line-height: 1; text-shadow: 0 0 8px currentColor; animation: hol-star ease-in-out infinite; }
+@keyframes hol-star { 0%, 100% { opacity: .15; transform: scale(.7); } 50% { opacity: .95; transform: scale(1.15); } }
+.boom { position: absolute; width: 0; height: 0; }
+.boom::before { /* the rocket's trail climbing to the burst */
+  content: ""; position: absolute; left: -1.5px; top: 0; width: 3px; height: 26px; border-radius: 2px;
+  background: linear-gradient(var(--c), transparent); animation: hol-rise .55s ease-out forwards; opacity: 0;
+}
+.spark {
+  position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--c); box-shadow: 0 0 10px 2px var(--c); opacity: 0; animation: hol-spark 1.7s ease-out .5s forwards;
+}
+@keyframes hol-rise { 0% { opacity: 1; transform: translateY(var(--rise)); } 100% { opacity: 0; transform: translateY(0); } }
+@keyframes hol-spark {
+  0% { opacity: 1; transform: translate(0, 0) scale(1.2); }
+  70% { opacity: .9; }
+  100% { opacity: 0; transform: translate(var(--dx), calc(var(--dy) + 40px)) scale(.4); }
+}
+
+/* Faint emblem in the open felt. */
 .holiday-emblem {
-  position: absolute; left: 50%; top: var(--mid-y, 50%); transform: translate(-50%, -50%);
-  font-size: clamp(90px, 22vmin, 190px); line-height: 1; opacity: .12; pointer-events: none; z-index: 0;
-  filter: saturate(.8);
+  position: absolute; left: 50%; top: var(--mid-y, 50%); transform: translate(-50%, -50%); z-index: 0;
+  font-size: clamp(90px, 22vmin, 190px); line-height: 1; opacity: .13; filter: saturate(.8);
 }
-.holiday-greeting {
-  font-family: var(--font-display); font-size: 15px; color: var(--gold-bright); margin: 0 0 8px;
-  text-shadow: 0 0 14px rgba(240, 205, 120, .35);
+
+/* Start screen showpiece. */
+.holiday-hero { margin: 2px 0 10px; }
+.hero-emblem {
+  font-size: 44px; line-height: 1; display: inline-block; margin-bottom: 4px;
+  filter: drop-shadow(0 0 14px var(--hol-a)); animation: hol-bob 3s ease-in-out infinite;
 }
+.hero-greeting {
+  font-family: var(--font-display); font-size: 21px; font-weight: 700; letter-spacing: .01em;
+  background: linear-gradient(100deg, var(--hol-a), #fff6dc 35%, var(--hol-c) 55%, var(--hol-a) 80%);
+  background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: hol-shimmer 5s linear infinite;
+}
+@keyframes hol-bob { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-6px) rotate(4deg); } }
+@keyframes hol-shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+
+/* Holiday confetti pieces. */
+.confetti i.piece { background: none !important; width: auto; height: auto; font-size: 18px; line-height: 1; }
+
 @media (max-width: 600px) {
-  .holiday-garland { font-size: 12px; letter-spacing: 4px; bottom: -10px; height: 20px; line-height: 20px; }
+  .hol-strand { bottom: -27px; } /* hang it below the small logo line */
+  .hol-strand .flag { width: 13px; height: 16px; margin-left: -6.5px; }
+  .hol-strand .ornament { font-size: 16px; margin-left: -8px; }
+  .hero-greeting { font-size: 18px; }
+  .hero-emblem { font-size: 38px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hol-strand .flag, .hol-strand .bulb, .hol-strand .ornament, .rail-bulb, .twinkle, .hero-emblem, .hero-greeting { animation: none; }
+  .flake, .leaf { display: none; }
+  .twinkle { opacity: .6; }
 }

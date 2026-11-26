@@ -76,10 +76,17 @@ online play is powered by a small Cloudflare Worker.
   cards shown); tap **Take a seat** when a seat opens or a bot is playing one.
 - **Works offline:** install it to your home screen; solo play works with no
   signal (a service worker, `sw.js`, caches the app).
-- **Holiday decorations:** on US federal holidays the table dresses up — a
-  garland along the header, a greeting on the start screen and a faint emblem
-  on the felt, all underneath the cards (Thanksgiving week 🦃, Christmas from
-  the 18th 🎄, the Fourth from July 1st 🎆, and the rest around their day).
+- **Holiday decorations:** on US federal holidays the room dresses up — a
+  strand of swaying bunting or twinkling bulbs (with hanging ornaments) along
+  the header, lights around the table rail, an ambient scene (fireworks for
+  the Fourth, New Year's and Juneteenth; snow for Christmas; falling leaves
+  for Thanksgiving; twinkling stars otherwise) behind the page and on the
+  felt, a floating emblem and shimmering greeting on the start screen, and
+  win confetti in the holiday's colours. All of it sits underneath the cards
+  and lets taps through; days of remembrance (Memorial Day, Veterans Day, MLK
+  Day) stay gentle, and "reduce motion" gets it without the movement.
+  (Thanksgiving week 🦃, Christmas from the 18th 🎄, the Fourth from July 1st
+  🎆, and the rest around their day.)
   Dates are worked out each year in `js/holidays.js`. On by default; switch it
   off in Table Rules → Look & sound. Preview any of them with `?holiday=` and
   an id (`newyear`, `mlk`, `presidents`, `memorial`, `juneteenth`, `july4`,
