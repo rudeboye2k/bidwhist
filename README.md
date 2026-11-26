@@ -148,9 +148,13 @@ degrading its normal play.
 The layout adapts to the screen rather than just shrinking:
 
 - **Phones (portrait):** opponents sit in a row across the top, the score lives
-  in the header with a ☰ menu, the table is sized to fit the screen with the
-  bid panel visible, and your hand fans to fit any width. When you pick up the
-  kitty, the 18 cards fan into two rows so every card is easy to tap.
+  in the header with a ☰ menu, and your own hand is drawn bigger than the rest
+  of the table. Every card in your hand shows at least 40px to tap (a
+  fingertip): when one row can't manage that — 12 cards on most phones, 18
+  after the kitty — the hand splits into two rows. The kitty and the played
+  cards sit in the open felt between the top players and your hand, and when
+  it's your turn to bid, call or bury, the page scrolls just enough to show
+  those buttons.
 - **Phones sideways:** table on the left, controls in a column on the right.
 - **Tablets / laptops:** the classic table; on shorter screens the cards scale
   down so the action bar never falls below the fold.

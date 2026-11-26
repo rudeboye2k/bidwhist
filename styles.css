@@ -584,6 +584,8 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
 /* ---------- phones (portrait) ---------- */
 @media (max-width: 600px) {
   :root { --card-w: 50px; --card-h: 72px; }
+  /* Your own hand is bigger than the rest of the table: it's what you tap. */
+  .seat-south .hand { --card-w: 62px; --card-h: 88px; }
   .room { padding: 0 max(10px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
 
   .topbar { align-items: center; gap: 10px; padding: max(10px, env(safe-area-inset-top)) 2px 8px; flex-wrap: nowrap; }
@@ -603,8 +605,9 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
 
   .layout { margin-top: 10px; gap: 12px; }
   .table {
-    height: clamp(330px, calc(100vh - 244px), 540px);
-    height: clamp(330px, calc(100dvh - 244px), 540px);
+    /* tall enough for the top players, the played cards and your two-row hand */
+    height: clamp(470px, calc(100vh - 244px), 560px);
+    height: clamp(470px, calc(100dvh - 244px), 560px);
     border-radius: 24px;
   }
   .rail { inset: 6px; border-radius: 19px; }
@@ -639,15 +642,15 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
   .card .idx { font-size: 12px; top: 3px; left: 4px; }
   .card .idx.flip { bottom: 3px; right: 4px; }
 
-  .kitty { top: 50%; }
+  .kitty { top: var(--mid-y, 50%); }
   .kitty .card { width: 30px; height: 42px; margin: 0 -11px; }
   .kitty::after { margin-left: 16px; font-size: 9px; }
-  .trick .played { top: 50%; }
+  .trick .played { top: var(--mid-y, 50%); }
   .trick .played.from-0 { transform: translate(-50%, -50%) translateY(38px) rotate(-2deg); }
   .trick .played.from-1 { transform: translate(-50%, -50%) translateX(-52px) rotate(5deg); }
   .trick .played.from-2 { transform: translate(-50%, -50%) translateY(-38px) rotate(2deg); }
   .trick .played.from-3 { transform: translate(-50%, -50%) translateX(52px) rotate(-5deg); }
-  .table-msg { top: calc(50% + 34px); font-size: 14px; white-space: normal; width: 88%; }
+  .table-msg { top: calc(var(--mid-y, 50%) + 34px); font-size: 14px; white-space: normal; width: 88%; }
 
   /* Bid panel: three compact rows — amounts, direction, Place Bid / Pass. */
   .action-bar { margin-top: 10px; min-height: 0; padding: 10px; gap: 8px; border-radius: 14px; }
@@ -680,6 +683,7 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
 /* ---------- phones held sideways (short landscape) ---------- */
 @media (orientation: landscape) and (max-height: 500px) {
   :root { --card-w: 46px; --card-h: 66px; }
+  .seat-south .hand { --card-w: 54px; --card-h: 76px; }
   .room { padding: 0 max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
   .topbar { align-items: center; gap: 10px; padding: 6px 2px 4px; flex-wrap: nowrap; }
   .brand { font-size: 20px; flex: 1; white-space: nowrap; }

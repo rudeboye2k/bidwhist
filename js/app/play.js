@@ -544,6 +544,18 @@ function setupTurn(view) {
     if (tip) coachLine(tip);
   }
   if (T.on) tutorialTip(view);
+  if (view.need !== 'play') revealActionBar();
+}
+
+// Phones: when it's your turn to bid, call or bury, make sure those buttons are
+// on screen (the table is tall, so on small phones they can sit below the fold).
+function revealActionBar() {
+  if (window.innerWidth > 600) return;
+  requestAnimationFrame(() => {
+    const r = $('action-bar').getBoundingClientRect();
+    const over = r.bottom - window.innerHeight;
+    if (over > 0) window.scrollBy({ top: Math.min(over + 10, r.top - 8), behavior: reduceMotion() ? 'auto' : 'smooth' });
+  });
 }
 
 function coachLine(html) {
