@@ -108,6 +108,7 @@ function renderPrefs() {
   $('pref-coach').checked = coachOn();
   $('pref-big').checked = document.documentElement.getAttribute('data-cards') === 'big';
   $('pref-four').checked = document.documentElement.getAttribute('data-deck') === 'four';
+  $('pref-holiday').checked = holidaysOn();
   $('pref-notify-row').hidden = !TurnAlert.supported;
   $('pref-notify').checked = TurnAlert.on();
   const sb = $('btn-sound');
@@ -127,6 +128,7 @@ const prefToggle = (id, key, attr, val) => $(id).addEventListener('change', (e) 
 prefToggle('pref-coach', 'bidwhist.coach', null);
 prefToggle('pref-big', 'bidwhist.bigCards', 'data-cards', 'big');
 prefToggle('pref-four', 'bidwhist.fourColor', 'data-deck', 'four');
+$('pref-holiday').addEventListener('change', (e) => setHolidaysOn(e.target.checked));
 $('pref-notify').addEventListener('change', async (e) => { e.target.checked = await TurnAlert.enable(e.target.checked); });
 
 // Table tools.
@@ -196,5 +198,6 @@ renderTools();
 renderPlates(); // show the profile + AI avatars before the first deal
 renderSplashProfile();
 renderRejoin();
+applyHoliday();
 actionHint('Waiting on the deal…');
 handleDeepLink(); // if opened from an invite link, jump to the join panel

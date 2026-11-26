@@ -76,6 +76,14 @@ online play is powered by a small Cloudflare Worker.
   cards shown); tap **Take a seat** when a seat opens or a bot is playing one.
 - **Works offline:** install it to your home screen; solo play works with no
   signal (a service worker, `sw.js`, caches the app).
+- **Holiday decorations:** on US federal holidays the table dresses up — a
+  garland along the header, a greeting on the start screen and a faint emblem
+  on the felt, all underneath the cards (Thanksgiving week 🦃, Christmas from
+  the 18th 🎄, the Fourth from July 1st 🎆, and the rest around their day).
+  Dates are worked out each year in `js/holidays.js`. On by default; switch it
+  off in Table Rules → Look & sound. Preview any of them with `?holiday=` and
+  an id (`newyear`, `mlk`, `presidents`, `memorial`, `juneteenth`, `july4`,
+  `labor`, `columbus`, `veterans`, `thanksgiving`, `christmas`).
 - **Readability:** bigger cards in your hand, a four-color deck (blue ♦,
   green ♣), keyboard play (Tab + Enter) and screen-reader labels.
 - **Branding:** page title, link-preview card (`img/og-card.png`, shown when
@@ -282,6 +290,7 @@ node tests/levels.js 3000    # paired AI sim: Sharp > Regular > Easy
 node tests/room.test.js      # authoritative room: turns, card hiding, isolation
 node tests/qrcode.test.js    # QR encoder: RS syndromes + structure
 node tests/worker.test.mjs   # version stamp, idle clean-up, Daily Deal board
+node tests/holidays.test.js  # federal holiday dates + decoration windows
 ```
 
 Browser tests drive real pages with Playwright against a local copy of the
