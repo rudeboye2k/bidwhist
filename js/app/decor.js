@@ -19,6 +19,7 @@
 // On by default; Table Rules → Look & sound turns it off. For a preview, add
 // ?holiday=<id> to the address (e.g. ?holiday=july4), or ?holiday=off.
 const HOLIDAY_PREF = 'bidwhist.holidays';
+const FUNDAY_PREF = 'bidwhist.fundays';
 const Decor = { holiday: null, timers: [], resizeTimer: null };
 
 function holidaysOn() {
@@ -28,16 +29,32 @@ function setHolidaysOn(on) {
   try { localStorage.setItem(HOLIDAY_PREF, on ? 'on' : 'off'); } catch (_) { /* ignore */ }
   applyHoliday();
 }
-
-// Which holiday to show right now (null = none).
-// The Table Rules switch always wins; a ?holiday= preview only picks which one.
-function currentHoliday() {
-  if (!holidaysOn()) return null;
-  const q = new URLSearchParams(location.search).get('holiday');
-  if (q === 'off') return null;
-  if (q && Holidays.byId(q)) return Holidays.byId(q);
-  return Holidays.holidayOn(new Date());
+function funDaysOn() {
+  try { return localStorage.getItem(FUNDAY_PREF) !== 'off'; } catch (_) { return true; }
 }
+function setFunDaysOn(on) {
+  try { localStorage.setItem(FUNDAY_PREF, on ? 'on' : 'off'); } catch (_) { /* ignore */ }
+  applyHoliday();
+}
+
+// What to show right now: { table, stage, also } (see FunDays.scene).
+// The Table Rules switches always win. Previews: ?holiday=<id> shows one
+// holiday or fun day; ?date=YYYY-MM-DD shows whatever that date brings.
+function currentScene() {
+  const none = { table: null, stage: null, also: [] };
+  if (!holidaysOn()) return none;
+  const q = new URLSearchParams(location.search);
+  const id = q.get('holiday');
+  if (id === 'off') return none;
+  if (id) {
+    const it = Holidays.byId(id) || FunDays.byId(id);
+    if (it) return { table: it, stage: it, also: [] };
+  }
+  const dq = (q.get('date') || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const date = dq ? new Date(+dq[1], dq[2] - 1, +dq[3], 12) : new Date();
+  return FunDays.scene(date, Holidays, funDaysOn());
+}
+function currentHoliday() { return currentScene().table; }
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -52,6 +69,7 @@ const el = (cls, parent, text) => {
 const small = () => window.innerWidth <= 600;
 
 function clearHoliday() {
+  removeStage();
   for (const t of Decor.timers) clearInterval(t);
   Decor.timers = [];
   for (const n of document.querySelectorAll('.hol')) n.remove();
@@ -62,7 +80,9 @@ function clearHoliday() {
 
 function applyHoliday() {
   clearHoliday();
-  const h = currentHoliday();
+  const sc = currentScene();
+  buildStage(sc.stage, sc.also);   // the start-screen showpiece
+  const h = sc.table;
   if (!h) return;
   Decor.holiday = h;
   const root = document.documentElement;
@@ -86,13 +106,6 @@ function applyHoliday() {
   const emblem = el('hol holiday-emblem', null, h.emblem);
   felt.insertAdjacentElement('afterend', emblem);
 
-  // Start screen showpiece.
-  const hero = el('hol holiday-hero');
-  el('hero-emblem', hero, h.emblem);
-  const g = el('hero-greeting', hero, h.greeting);
-  g.setAttribute('aria-hidden', 'false');
-  const kicker = document.querySelector('.splash-kicker');
-  kicker.parentNode.insertBefore(hero, kicker);
 }
 
 // ---- the strand along the header -------------------------------------------
@@ -179,6 +192,16 @@ function startEffect(h, layer, density) {
         animationDuration: rand(11, 20).toFixed(1) + 's', animationDelay: (-rand(0, 20)).toFixed(1) + 's' });
       lf.style.setProperty('--drift', rand(-90, 90).toFixed(0) + 'px');
       lf.style.setProperty('--spin', (rand(-1, 1) > 0 ? 1 : -1) * rand(180, 540) + 'deg');
+    }
+  } else if (['float', 'bubbles', 'confetti', 'rain'].includes(h.fx)) {
+    // Fun days: their emoji (or bubbles, or umbrellas) drift slowly upward.
+    const set = h.fx === 'bubbles' ? ['🫧'] : h.fx === 'rain' ? ['☂️', '🌂'] : (h.pieces && h.pieces.length ? h.pieces : [h.emblem]);
+    const n = Math.round(12 * scale);
+    for (let i = 0; i < n; i++) {
+      const f = el('riser', layer, pick(set));
+      Object.assign(f.style, { left: rand(0, 100) + '%', fontSize: rand(14, 28).toFixed(0) + 'px', opacity: rand(0.35, 0.8).toFixed(2),
+        animationDuration: rand(14, 24).toFixed(1) + 's', animationDelay: (-rand(0, 24)).toFixed(1) + 's' });
+      f.style.setProperty('--drift', rand(-60, 60).toFixed(0) + 'px');
     }
   } else {
     sprinkleStars(h, layer, Math.round(30 * scale));

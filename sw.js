@@ -6,9 +6,9 @@
 const CACHE = 'gmdk-__V__'; // the server stamps the deploy's version here (see server/worker.js)
 const SHELL = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
-  'js/engine.js', 'js/ai.js', 'js/room-core.js', 'js/qrcode.js', 'js/net.js', 'js/holidays.js',
+  'js/engine.js', 'js/ai.js', 'js/room-core.js', 'js/qrcode.js', 'js/net.js', 'js/holidays.js', 'js/fundays.js',
   'js/app/core.js', 'js/app/effects.js', 'js/app/table.js', 'js/app/actions.js', 'js/app/tutorial.js',
-  'js/app/play.js', 'js/app/settings.js', 'js/app/daily.js', 'js/app/decor.js', 'js/app/main.js',
+  'js/app/play.js', 'js/app/settings.js', 'js/app/daily.js', 'js/app/stage.js', 'js/app/decor.js', 'js/app/main.js',
   'img/icon-192.png', 'img/icon-512.png', 'img/apple-touch-icon.png', 'img/favicon-32.png',
 ];
 

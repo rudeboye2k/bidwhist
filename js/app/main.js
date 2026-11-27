@@ -109,6 +109,7 @@ function renderPrefs() {
   $('pref-big').checked = document.documentElement.getAttribute('data-cards') === 'big';
   $('pref-four').checked = document.documentElement.getAttribute('data-deck') === 'four';
   $('pref-holiday').checked = holidaysOn();
+  $('pref-fundays').checked = funDaysOn();
   $('pref-notify-row').hidden = !TurnAlert.supported;
   $('pref-notify').checked = TurnAlert.on();
   const sb = $('btn-sound');
@@ -129,6 +130,7 @@ prefToggle('pref-coach', 'bidwhist.coach', null);
 prefToggle('pref-big', 'bidwhist.bigCards', 'data-cards', 'big');
 prefToggle('pref-four', 'bidwhist.fourColor', 'data-deck', 'four');
 $('pref-holiday').addEventListener('change', (e) => setHolidaysOn(e.target.checked));
+$('pref-fundays').addEventListener('change', (e) => setFunDaysOn(e.target.checked));
 $('pref-notify').addEventListener('change', async (e) => { e.target.checked = await TurnAlert.enable(e.target.checked); });
 
 // Table tools.

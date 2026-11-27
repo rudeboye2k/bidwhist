@@ -20,6 +20,7 @@ jobs:
       - run: node tests/room.test.js
       - run: node tests/qrcode.test.js
       - run: node tests/holidays.test.js
+      - run: node tests/fundays.test.js
       - run: node tests/worker.test.mjs
       - run: node tests/simulate.js 300
       - run: node tests/levels.js 2000
