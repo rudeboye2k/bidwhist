@@ -87,6 +87,24 @@ online play is powered by a small Cloudflare Worker.
   Day) stay gentle, and "reduce motion" gets it without the movement.
   (Thanksgiving week 🦃, Christmas from the 18th 🎄, the Fourth from July 1st
   🎆, and the rest around their day.)
+- **Holiday start screen:** on a holiday the start screen becomes a showpiece
+  — a full-height animated scene on the left (on phones, across the top, with
+  the menu card riding up over it) with big headline type. The scene is drawn
+  live on a canvas (`js/app/stage.js`): fireworks with trails, layered snow,
+  drifting leaves, starfields with shooting stars, iridescent bubbles,
+  confetti, rain, or the day's emoji floating up, behind a glowing emblem.
+- **Fun & obscure days:** ~100 light-hearted days (`js/fundays.js`) — Buy
+  Nothing Day, GivingTuesday, Krampusnacht, Repeal Day, Bubble Wrap
+  Appreciation Day, Tau Day, Wear a Plunger on Your Head Day… — each with its
+  own scene and line. A federal holiday keeps the table decorated through its
+  window, while a fun day takes the start screen on its date ("Also today"
+  shows the rest). Separate switch: Table Rules → Look & sound. Preview any
+  day with `?date=YYYY-MM-DD` or `?holiday=<id>`.
+- **First-book flyover:** on a federal holiday, the first book of every hand
+  sends something across the screen (`js/app/flyover.js`): Santa's sleigh,
+  Fourth of July fireworks and an eagle, a champagne pop for New Year's, a
+  strutting turkey, doves for MLK Day, a line of flags for Memorial Day, and
+  so on. It never blocks a tap.
   Dates are worked out each year in `js/holidays.js`. On by default; switch it
   off in Table Rules → Look & sound. Preview any of them with `?holiday=` and
   an id (`newyear`, `mlk`, `presidents`, `memorial`, `juneteenth`, `july4`,

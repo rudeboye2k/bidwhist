@@ -8,7 +8,7 @@ const decor = (p) => p.evaluate(() => ({
   id: document.documentElement.getAttribute('data-holiday'),
   garland: !!document.querySelector('.hol-strand'),
   emblem: !!document.querySelector('.holiday-emblem'),
-  greeting: (document.querySelector('.hero-greeting') || {}).textContent || '',
+  greeting: (document.querySelector('.stage-title') || {}).textContent || '',
   fx: !!document.querySelector('.hol-fx-page'),
 }));
 

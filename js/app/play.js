@@ -252,7 +252,7 @@ async function animateEvents(events) {
         // A Boston on screen stays until you tap (online: at most 20s).
         if (Boston.open) { offerBostonContinue(); await waitForBoston(20000); closeBoston(); }
         G.bids = [null, null, null, null];
-        G.handResult = null; Online.summaryFor = null;
+        G.handResult = null; Online.summaryFor = null; G.firstBookDone = false;
         G.dealer = ev.dealer; G.handNo = ev.handNo;
         G.seatBooks = [0, 0, 0, 0]; G.contract = null; G.memory = new Set(); G.lastTrick = null;
         clearTrick(); renderPlateBooks(); renderTrumpBadge();
@@ -327,6 +327,12 @@ async function animateEvents(events) {
           G.lastTrick = { cards: (ev.cards || []).map((p) => ({ seat: p.player, card: p.card })), winner: ev.winner };
         }
         await collectTrick(ev.winner);
+        // Federal holiday: the hand's first book sets off that holiday's flyover.
+        if (!G.firstBookDone) {
+          G.firstBookDone = true;
+          const h = typeof Decor !== 'undefined' && Decor.holiday;
+          if (h && h.kind !== 'fun' && !T.on) holidayFlyover(h.id);
+        }
         if (T.on) await tutorialBook(ev.winner);
         break;
       case 'discard':

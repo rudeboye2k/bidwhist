@@ -1595,3 +1595,6 @@ input[type="text"], input:not([type]), select { font-size: 16px; }
   .holiday-stage, .stage-eyebrow, .stage-title, .stage-line, .stage-meta { animation: none; }
   .riser { display: none; }
 }
+
+/* First-book flyover (js/app/flyover.js): over the table, under dialogs, never takes taps. */
+.flyover { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 50; pointer-events: none; }
